@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-    id("maven-publish")
+    `maven-publish`
 }
 
 android {
@@ -10,17 +10,12 @@ android {
 
     defaultConfig {
         minSdk = 24
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
         }
     }
 
@@ -33,7 +28,6 @@ android {
         jvmTarget = "17"
     }
 
-    // 🔥 THIS IS THE IMPORTANT PART
     publishing {
         singleVariant("release") {
             withSourcesJar()
@@ -41,8 +35,16 @@ android {
     }
 }
 
-dependencies {
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
-    implementation(libs.material)
+afterEvaluate {
+    extensions.configure<PublishingExtension>("publishing") {
+        publications {
+            create<MavenPublication>("release") {
+                from(components["release"])
+
+                groupId = "com.github.HamzaIqbal-11"
+                artifactId = "gyroscope"
+                version = "1.0.5"
+            }
+        }
+    }
 }
