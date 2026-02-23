@@ -20,5 +20,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "sdk"
-include(":app")
+//include(":app")
 include(":gyroscope")

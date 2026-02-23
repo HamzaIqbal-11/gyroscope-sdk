@@ -43,3 +43,23 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }
+
+afterEvaluate {
+    publishing {
+        publications {
+            register<MavenPublication>("release") {
+                from(components["release"])  // Automatically includes the AAR
+
+                // Optional but recommended: sources JAR (helps IDEs show your code)
+                artifact(tasks.register<Jar>("sourcesJar") {
+                    from(android.sourceSets.getByName("main").kotlin.srcDirs)
+                    from(android.sourceSets.getByName("main").java.srcDirs)
+                    archiveClassifier.set("sources")
+                }.get())
+            }
+        }
+        repositories {
+            mavenLocal()  // JitPack looks for artifacts here after publishToMavenLocal
+        }
+    }
+}
