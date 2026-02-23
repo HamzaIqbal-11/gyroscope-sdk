@@ -52,7 +52,7 @@ afterEvaluate {
 
                 // Optional but recommended: sources JAR (helps IDEs show your code)
                 artifact(tasks.register<Jar>("sourcesJar") {
-                    from(android.sourceSets.getByName("main").kotlin.srcDirs)
+                    from(android.sourceSets.getByName("main").kotlin.srcDirs())
                     from(android.sourceSets.getByName("main").java.srcDirs)
                     archiveClassifier.set("sources")
                 }.get())
