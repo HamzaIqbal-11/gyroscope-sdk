@@ -44,22 +44,30 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
 }
 
+// Sources JAR - fixed version
+tasks.register<Jar>("sourcesJar") {
+    archiveClassifier.set("sources")
+    from("src/main/kotlin")
+
+}
+
+artifacts {
+    archives(tasks.named("sourcesJar"))
+}
+
+// Publishing block (keep/add this)
 afterEvaluate {
     publishing {
         publications {
             register<MavenPublication>("release") {
-                from(components["release"])  // Automatically includes the AAR
+                from(components["release"])
 
-                // Optional but recommended: sources JAR (helps IDEs show your code)
-                artifact(tasks.register<Jar>("sourcesJar") {
-                    from(android.sourceSets.getByName("main").kotlin.srcDirs())
-                    from(android.sourceSets.getByName("main").java.srcDirs)
-                    archiveClassifier.set("sources")
-                }.get())
+                // Include sources JAR in publication
+                artifact(tasks.named("sourcesJar"))
             }
         }
         repositories {
-            mavenLocal()  // JitPack looks for artifacts here after publishToMavenLocal
+            mavenLocal()
         }
     }
 }
