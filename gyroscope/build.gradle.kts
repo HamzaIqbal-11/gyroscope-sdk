@@ -48,26 +48,35 @@ dependencies {
 tasks.register<Jar>("sourcesJar") {
     archiveClassifier.set("sources")
     from("src/main/kotlin")
-
+    // from("src/main/java")  // ← keep only if you have Java files
 }
 
+// Ensure artifacts include it (good to have)
 artifacts {
     archives(tasks.named("sourcesJar"))
 }
 
-// Publishing block (keep/add this)
+// Publishing block with explicit dependency fix
 afterEvaluate {
     publishing {
         publications {
             register<MavenPublication>("release") {
                 from(components["release"])
-
-                // Include sources JAR in publication
                 artifact(tasks.named("sourcesJar"))
+
+                // Optional: group/artifact/version overrides (JitPack ignores version but it's fine)
+                groupId = "com.github.HamzaIqbal-11"
+                artifactId = "gyroscope-sdk"
             }
         }
         repositories {
             mavenLocal()
         }
+    }
+
+    // Critical fix: Make the metadata generation task depend on sourcesJar
+    // This declares the explicit dependency Gradle wants
+    tasks.named("generateMetadataFileForReleasePublication") {
+        dependsOn("sourcesJar")
     }
 }
