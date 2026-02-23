@@ -1,5 +1,4 @@
-package com.yourname.gyroscopesdk
-
+package com.hamzaiqbal.gyroscopesdk
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
