@@ -62,9 +62,19 @@ afterEvaluate {
         publications {
             register<MavenPublication>("release") {
                 from(components["release"])
+
+                // Explicitly add your custom sources JAR
                 artifact(tasks.named("sourcesJar"))
 
-                // Optional: group/artifact/version overrides (JitPack ignores version but it's fine)
+                // Prevent automatic sources JAR generation (key fix!)
+                pom.withXml {
+                    val dependenciesNode = asNode().appendNode("dependencies")
+                    // Optional: customize POM if needed
+                }
+
+                // Disable auto-generated sources/classifier if present
+                artifacts.removeAll { it.classifier == "sources" && it.extension == "jar" }
+
                 groupId = "com.github.HamzaIqbal-11"
                 artifactId = "gyroscope-sdk"
             }
@@ -74,9 +84,12 @@ afterEvaluate {
         }
     }
 
-    // Critical fix: Make the metadata generation task depend on sourcesJar
-    // This declares the explicit dependency Gradle wants
+    // Ensure metadata task depends on sourcesJar
     tasks.named("generateMetadataFileForReleasePublication") {
+        dependsOn("sourcesJar")
+    }
+
+    tasks.named("generatePomFileForReleasePublication") {
         dependsOn("sourcesJar")
     }
 }
