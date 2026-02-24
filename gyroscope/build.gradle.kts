@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.gyroscope"
+    namespace = "com.earnscape.gyroscopesdk"
     compileSdk = 36
 
     defaultConfig {
@@ -35,6 +35,12 @@ android {
     }
 }
 
+// ✅ LocalBroadcastManager add kiya
+dependencies {
+    implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
+    implementation("androidx.core:core-ktx:1.12.0")
+}
+
 afterEvaluate {
     extensions.configure<PublishingExtension>("publishing") {
         publications {
@@ -42,8 +48,8 @@ afterEvaluate {
                 from(components["release"])
 
                 groupId = "com.github.HamzaIqbal-11"
-                artifactId = "gyroscope"
-                version = "1.0.5"
+                artifactId = "gyroscope-sdk"
+                version = "1.0.7"
             }
         }
     }
