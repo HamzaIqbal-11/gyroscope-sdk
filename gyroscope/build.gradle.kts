@@ -39,8 +39,21 @@ dependencies {
     implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
     implementation("androidx.core:core-ktx:1.13.1")
 
-    // Pedro library – confirmed working version 2.6.7 (latest stable tag)
+    // Remove fork (causing mismatch)
+    // implementation("com.github.BilalFarooq05:RootEncoder:v2.6.7-audio-mix")
+    // implementation("com.github.BilalFarooq05.RootEncoder:extra-sources:v2.6.7-audio-mix")
+
+    // Use official – this matches your connectChecker code perfectly
     implementation("com.github.pedroSG94.RootEncoder:library:2.6.7")
+
+    // Optional extra-sources if you use special cameras
+    // implementation("com.github.pedroSG94.RootEncoder:extra-sources:2.6.7")
+
+    // Your other deps...
+    implementation("com.google.firebase:firebase-messaging-directboot:20.2.0")
+    implementation("androidx.emoji2:emoji2:1.5.0")
+    implementation("androidx.emoji2:emoji2-bundled:1.5.0")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 afterEvaluate {
@@ -51,7 +64,6 @@ afterEvaluate {
 
                 groupId = "com.github.HamzaIqbal-11"
                 artifactId = "gyroscope-sdk"
-                // No hardcoded version – JitPack uses git tag
             }
         }
     }

@@ -9,8 +9,10 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import com.pedro.rtplibrary.rtmp.RtmpDisplay
-import com.pedro.rtmp.utils.ConnectCheckerRtmp
+import com.pedro.library.base.DisplayBase
+import com.pedro.library.rtmp.RtmpDisplay
+import com.pedro.library.rtsp.RtspDisplay
+import com.pedro.common.ConnectChecker
 import java.io.File
 
 class StreamingSDK(
@@ -21,7 +23,6 @@ class StreamingSDK(
     companion object {
         private const val TAG = "StreamingSDK"
 
-        // Broadcast Actions
         const val ACTION_SESSION_STARTED = "com.earnscape.gyroscopesdk.SESSION_STARTED"
         const val ACTION_SESSION_STOPPED = "com.earnscape.gyroscopesdk.SESSION_STOPPED"
         const val ACTION_GYRO_DATA       = "com.earnscape.gyroscopesdk.GYRO_DATA"
@@ -72,29 +73,46 @@ class StreamingSDK(
         }
     }
 
-    private val connectChecker = object : ConnectCheckerRtmp {
-        override fun onConnectionSuccessRtmp() {
-            Log.d(TAG, "RTMP Connected successfully")
+    private val connectChecker = object : ConnectChecker {
+
+        override fun onConnectionSuccess() {
+            Log.d(TAG, "RTMP Connected")
             broadcastManager.sendBroadcast(Intent(ACTION_STREAMING_STARTED))
         }
 
-        override fun onConnectionFailedRtmp(reason: String) {
-            Log.e(TAG, "RTMP connection failed: $reason")
+        override fun onConnectionFailed(reason: String) {
+            Log.e(TAG, "Failed: $reason")
+            // Optional: you can add auto-reconnect logic here if desired
         }
 
-        override fun onNewBitrateRtmp(bitrate: Long) {
-            // Optional: can broadcast bitrate if needed
+        override fun onNewBitrate(bitrate: Long) {
+            // ignore (or log if you want: Log.d(TAG, "New bitrate: $bitrate bps"))
         }
 
-        override fun onDisconnectRtmp() {
-            Log.d(TAG, "RTMP disconnected")
+        override fun onDisconnect() {
+            Log.d(TAG, "Disconnected")
+            // Optional: broadcast something like ACTION_STREAMING_STOPPED if needed
+        }
+
+        // ── Required by the interface in 2.6.x ──
+        override fun onConnectionStarted(url: String) {
+            // Called when connection attempt begins (before success/fail)
+            // Usually safe to ignore for simple use-cases
+            Log.d(TAG, "Connection started to: $url")
+        }
+
+        override fun onAuthError() {
+            // Some RTMP servers (e.g. with login/password) call this on bad credentials
+            Log.e(TAG, "Authentication error")
+            // You can stop stream, show toast, etc.
+        }
+
+        override fun onAuthSuccess() {
+            // Called on successful auth (rare for public RTMP endpoints)
+            Log.d(TAG, "Authentication success")
         }
     }
 
-    /**
-     * Start session + gyroscope + streaming/recording
-     * @param streamUrl RTMP URL (e.g. rtmp://your-server/live/key) or null for local MP4 only
-     */
     fun startSession(
         gameId: String,
         streamUrl: String? = null,
@@ -112,64 +130,58 @@ class StreamingSDK(
         this.totalPausedMs = 0L
         readingsBuffer.clear()
 
-        // Start gyroscope
-        gyroscopeSDK.start(
-            samplingRate = samplingRate,
-            autoLog = autoLog,
-            onData = { data -> _onGyroReading(data) }
-        )
+        gyroscopeSDK.start(samplingRate, autoLog) { data -> _onGyroReading(data) }
 
-        // Setup screen streaming/recording
         setupScreenStreaming()
 
         isStreaming = true
         mainHandler.postDelayed(idleChecker, 200)
 
-        // Notify Flutter
         broadcastManager.sendBroadcast(Intent(ACTION_SESSION_STARTED).apply {
             putExtra("sessionId", sessionId)
             putExtra("gameId", gameId)
             putExtra("startTimeMs", sessionStartMs)
         })
 
-        Log.d(TAG, "StreamingSDK session started: $sessionId | RTMP: ${streamUrl != null}")
+        Log.d(TAG, "Session started: $sessionId")
         return sessionId!!
     }
 
     private fun setupScreenStreaming() {
         localRecordFile = File(context.externalCacheDir, "session_${sessionId}.mp4")
 
-        rtmpDisplay = RtmpDisplay(context, connectChecker)
+        // Fixed constructor: context first, then likely a Boolean flag (try false first), then connectChecker
+        rtmpDisplay = RtmpDisplay(context, false, connectChecker)  // ← add false (or true) as 2nd param
 
-        // Prepare video & audio (adjust resolution/bitrate as needed)
-        rtmpDisplay?.prepareVideo(1280, 720, 30)  // 720p 30fps
-        rtmpDisplay?.prepareAudio(128 * 1024, 44100, true, false, false)
+        // If the above still complains about types / missing params, try these variants one by one:
+        // rtmpDisplay = RtmpDisplay(context, connectChecker = connectChecker)          // if named args allowed & no Boolean
+        // rtmpDisplay = RtmpDisplay(context, true, connectChecker)                    // try true if false fails
+        // rtmpDisplay = RtmpDisplay(context, useOpus = false, connectChecker = connectChecker)  // if named
+
+        rtmpDisplay?.prepareVideo(1280, 720, 30)
+        rtmpDisplay?.prepareAudio(128 * 1024, 44100, true, false, false)  // stereo? last false = no echo cancel?
 
         if (streamUrl != null) {
-            // Live RTMP streaming
             rtmpDisplay?.startStream(streamUrl!!)
         } else {
-            // Local MP4 recording
             rtmpDisplay?.startRecord(localRecordFile!!.absolutePath)
         }
     }
 
-    /**
-     * Call this after user grants MediaProjection permission
-     * (from Flutter plugin after startActivityForResult)
-     */
     fun setMediaProjection(resultCode: Int, data: Intent?) {
         if (data == null) return
         mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data)
         rtmpDisplay?.setIntentResult(resultCode, data)
-        Log.d(TAG, "MediaProjection set successfully")
+        Log.d(TAG, "MediaProjection set")
     }
 
     fun pauseSession() {
         if (!isStreaming || isPaused) return
         isPaused = true
         pauseStartMs = System.currentTimeMillis()
-        rtmpDisplay?.pauseRecord()
+
+        rtmpDisplay?.stopRecord()  // Pause by stopping record
+
         broadcastManager.sendBroadcast(Intent(ACTION_STREAMING_PAUSED))
         Log.d(TAG, "Streaming paused")
     }
@@ -178,7 +190,13 @@ class StreamingSDK(
         if (!isStreaming || !isPaused) return
         totalPausedMs += (System.currentTimeMillis() - pauseStartMs)
         isPaused = false
-        rtmpDisplay?.resumeRecord()
+
+        if (localRecordFile != null) {
+            rtmpDisplay?.startRecord(localRecordFile!!.absolutePath)  // Resume by restarting on same file (appends)
+        } else if (streamUrl != null) {
+            rtmpDisplay?.startStream(streamUrl!!)
+        }
+
         broadcastManager.sendBroadcast(Intent(ACTION_STREAMING_RESUMED))
         Log.d(TAG, "Streaming resumed")
     }
@@ -209,7 +227,6 @@ class StreamingSDK(
         broadcastManager.sendBroadcast(Intent(ACTION_SESSION_STOPPED))
         broadcastManager.sendBroadcast(Intent(ACTION_STREAMING_STOPPED))
 
-        // Cleanup
         sessionId = null
         gameId = null
         readingsBuffer.clear()
@@ -245,7 +262,6 @@ class StreamingSDK(
         })
     }
 
-    // Data classes
     data class ReadingData(
         val x: Float,
         val y: Float,
