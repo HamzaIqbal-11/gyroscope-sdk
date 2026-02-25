@@ -39,6 +39,14 @@ android {
 dependencies {
     implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
     implementation("androidx.core:core-ktx:1.12.0")
+    // Recommended: Use the full RootEncoder library (includes RTMP + RTSP + more)
+    implementation ("com.github.pedroSG94:RootEncoder:library:2.7.7")   // Check latest tag on GitHub
+
+    // OR if you only need RTMP part (smaller size):
+    // implementation 'com.github.pedroSG94.RootEncoder:rtmp:2.7.7'
+
+    // Older name (still works for compatibility):
+    // implementation 'com.github.pedroSG94.rtmp-rtsp-stream-client-java:rtplibrary:2.7.7'
 }
 
 afterEvaluate {
