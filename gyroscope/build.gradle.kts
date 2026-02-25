@@ -44,9 +44,8 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
 
     // This should now resolve correctly because JitPack is first in settings
-    implementation("com.github.pedroSG94.RootEncoder:library:2.6.7")
-    // If you use extra camera sources (most people don't):
-     implementation("com.github.pedroSG94.RootEncoder:extra-sources:2.6.7")
+    implementation("com.github.BilalFarooq05.RootEncoder:library:v2.6.7-audio-mix")
+    implementation("com.github.BilalFarooq05.RootEncoder:extra-sources:v2.6.7-audio-mix")
 
     // Uncomment only if you actually need special camera sources
     // implementation("com.github.pedroSG94.RootEncoder:extra-sources:2.6.7")
