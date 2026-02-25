@@ -5,16 +5,34 @@ import android.content.Intent
 import android.hardware.SensorManager
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import com.pedro.library.base.DisplayBase
-import com.pedro.library.rtmp.RtmpDisplay
-import com.pedro.library.rtsp.RtspDisplay
 import com.pedro.common.ConnectChecker
+import com.pedro.encoder.input.sources.audio.InternalAudioSource
+import com.pedro.encoder.input.sources.audio.MicrophoneSource
+import com.pedro.encoder.input.sources.audio.MixAudioSource
+import com.pedro.encoder.input.sources.audio.NoAudioSource
+import com.pedro.encoder.input.sources.video.NoVideoSource
+import com.pedro.encoder.input.sources.video.ScreenSource
+import com.pedro.library.generic.GenericStream
 import java.io.File
+import java.io.IOException
 
+/**
+ * StreamingSDK - Handles screen streaming (RTMP/RTSP) + gyroscope data collection.
+ *
+ * Uses official RootEncoder 2.6.7 GenericStream API.
+ * GenericStream auto-detects protocol (RTMP/RTSP/SRT) from the stream URL.
+ * Uses ScreenSource for video and MixAudioSource for combined mic + game audio.
+ *
+ * Usage:
+ *   1. Call setMediaProjection() with the result from MediaProjection permission
+ *   2. Call startSession() with your RTMP/RTSP URL
+ *   3. Call stopSession() when done
+ */
 class StreamingSDK(
     private val context: Context,
     private val gyroscopeSDK: GyroscopeSDK
@@ -23,38 +41,61 @@ class StreamingSDK(
     companion object {
         private const val TAG = "StreamingSDK"
 
-        const val ACTION_SESSION_STARTED = "com.earnscape.gyroscopesdk.SESSION_STARTED"
-        const val ACTION_SESSION_STOPPED = "com.earnscape.gyroscopesdk.SESSION_STOPPED"
-        const val ACTION_GYRO_DATA       = "com.earnscape.gyroscopesdk.GYRO_DATA"
-        const val ACTION_GYRO_IDLE       = "com.earnscape.gyroscopesdk.GYRO_IDLE"
-        const val ACTION_GYRO_ACTIVE     = "com.earnscape.gyroscopesdk.GYRO_ACTIVE"
-        const val ACTION_STREAMING_STARTED = "com.earnscape.gyroscopesdk.STREAMING_STARTED"
-        const val ACTION_STREAMING_PAUSED  = "com.earnscape.gyroscopesdk.STREAMING_PAUSED"
-        const val ACTION_STREAMING_RESUMED = "com.earnscape.gyroscopesdk.STREAMING_RESUMED"
-        const val ACTION_STREAMING_STOPPED = "com.earnscape.gyroscopesdk.STREAMING_STOPPED"
+        // Broadcast actions
+        const val ACTION_SESSION_STARTED     = "com.earnscape.gyroscopesdk.SESSION_STARTED"
+        const val ACTION_SESSION_STOPPED     = "com.earnscape.gyroscopesdk.SESSION_STOPPED"
+        const val ACTION_GYRO_DATA           = "com.earnscape.gyroscopesdk.GYRO_DATA"
+        const val ACTION_GYRO_IDLE           = "com.earnscape.gyroscopesdk.GYRO_IDLE"
+        const val ACTION_GYRO_ACTIVE         = "com.earnscape.gyroscopesdk.GYRO_ACTIVE"
+        const val ACTION_STREAMING_STARTED   = "com.earnscape.gyroscopesdk.STREAMING_STARTED"
+        const val ACTION_STREAMING_PAUSED    = "com.earnscape.gyroscopesdk.STREAMING_PAUSED"
+        const val ACTION_STREAMING_RESUMED   = "com.earnscape.gyroscopesdk.STREAMING_RESUMED"
+        const val ACTION_STREAMING_STOPPED   = "com.earnscape.gyroscopesdk.STREAMING_STOPPED"
+        const val ACTION_STREAMING_ERROR     = "com.earnscape.gyroscopesdk.STREAMING_ERROR"
+
+        // Default stream settings
+        private const val DEFAULT_WIDTH = 1280
+        private const val DEFAULT_HEIGHT = 720
+        private const val DEFAULT_BITRATE = 300 * 1024
+        private const val DEFAULT_FPS = 20
+        private const val DEFAULT_ROTATION = 0
+        private const val DEFAULT_AUDIO_BITRATE = 128 * 1024
+        private const val DEFAULT_SAMPLE_RATE = 44100
     }
 
     private val broadcastManager = LocalBroadcastManager.getInstance(context)
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    // Session state
     private var isStreaming = false
+    private var isPaused = false
     private var sessionId: String? = null
     private var gameId: String? = null
     private var sessionStartMs: Long = 0L
     private var totalPausedMs: Long = 0L
+    private var pauseStartMs: Long = 0L
 
+    // Gyroscope data buffer
     private val readingsBuffer = mutableListOf<ReadingData>()
 
-    private var rtmpDisplay: RtmpDisplay? = null
-    private var mediaProjection: MediaProjection? = null
+    // RootEncoder GenericStream (handles RTMP, RTSP, SRT based on URL)
+    private var genericStream: GenericStream? = null
     private var streamUrl: String? = null
     private var localRecordFile: File? = null
 
-    private var isPaused = false
-    private var pauseStartMs: Long = 0L
+    // MediaProjection for screen capture + internal audio
+    private val mediaProjectionManager =
+        context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+    private var mediaProjection: MediaProjection? = null
+    private var projectionResultCode: Int = 0
+    private var projectionData: Intent? = null
 
-    private val mediaProjectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+    // Current audio mode tracking (for mute/unmute by switching sources)
+    private var currentAudioMode: AudioMode = AudioMode.NONE
+    private var isMicMuted = false
+    private var isDeviceAudioMuted = false
 
+    // Idle detection
     private var isIdle = false
     private var lastMovementMs: Long = 0L
 
@@ -73,51 +114,73 @@ class StreamingSDK(
         }
     }
 
+    // ─── ConnectChecker ─────────────────────────────────────────────
+
     private val connectChecker = object : ConnectChecker {
 
         override fun onConnectionSuccess() {
-            Log.d(TAG, "RTMP Connected")
-            broadcastManager.sendBroadcast(Intent(ACTION_STREAMING_STARTED))
+            Log.d(TAG, "Stream connected")
+            broadcastManager.sendBroadcast(Intent(ACTION_STREAMING_STARTED).apply {
+                putExtra("sessionId", sessionId)
+            })
         }
 
         override fun onConnectionFailed(reason: String) {
-            Log.e(TAG, "Failed: $reason")
-            // Optional: you can add auto-reconnect logic here if desired
+            Log.e(TAG, "Stream connection failed: $reason")
+            broadcastManager.sendBroadcast(Intent(ACTION_STREAMING_ERROR).apply {
+                putExtra("sessionId", sessionId)
+                putExtra("reason", reason)
+            })
         }
 
-        override fun onNewBitrate(bitrate: Long) {
-            // ignore (or log if you want: Log.d(TAG, "New bitrate: $bitrate bps"))
-        }
+        override fun onNewBitrate(bitrate: Long) {}
 
         override fun onDisconnect() {
-            Log.d(TAG, "Disconnected")
-            // Optional: broadcast something like ACTION_STREAMING_STOPPED if needed
+            Log.d(TAG, "Stream disconnected")
         }
 
-        // ── Required by the interface in 2.6.x ──
         override fun onConnectionStarted(url: String) {
-            // Called when connection attempt begins (before success/fail)
-            // Usually safe to ignore for simple use-cases
             Log.d(TAG, "Connection started to: $url")
         }
 
         override fun onAuthError() {
-            // Some RTMP servers (e.g. with login/password) call this on bad credentials
             Log.e(TAG, "Authentication error")
-            // You can stop stream, show toast, etc.
+            broadcastManager.sendBroadcast(Intent(ACTION_STREAMING_ERROR).apply {
+                putExtra("sessionId", sessionId)
+                putExtra("reason", "auth_error")
+            })
         }
 
         override fun onAuthSuccess() {
-            // Called on successful auth (rare for public RTMP endpoints)
             Log.d(TAG, "Authentication success")
         }
     }
 
+    // ─── Public API ─────────────────────────────────────────────────
+
+    /**
+     * Store MediaProjection result. Must be called BEFORE startSession().
+     */
+    fun setMediaProjection(resultCode: Int, data: Intent?) {
+        if (data == null) {
+            Log.e(TAG, "MediaProjection data is null")
+            return
+        }
+        projectionResultCode = resultCode
+        projectionData = data
+        mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data)
+        Log.d(TAG, "MediaProjection set")
+    }
+
+    /**
+     * Start a streaming + gyroscope session.
+     */
     fun startSession(
         gameId: String,
         streamUrl: String? = null,
         samplingRate: Int = SensorManager.SENSOR_DELAY_GAME,
-        autoLog: Boolean = false
+        autoLog: Boolean = false,
+        config: StreamConfig = StreamConfig()
     ): String {
         if (isStreaming) stopSession()
 
@@ -128,11 +191,12 @@ class StreamingSDK(
         this.streamUrl = streamUrl
         this.isPaused = false
         this.totalPausedMs = 0L
+        this.isMicMuted = false
+        this.isDeviceAudioMuted = false
         readingsBuffer.clear()
 
-        gyroscopeSDK.start(samplingRate, autoLog) { data -> _onGyroReading(data) }
-
-        setupScreenStreaming()
+        gyroscopeSDK.start(samplingRate, autoLog) { data -> onGyroReading(data) }
+        setupStreaming(config)
 
         isStreaming = true
         mainHandler.postDelayed(idleChecker, 200)
@@ -147,68 +211,66 @@ class StreamingSDK(
         return sessionId!!
     }
 
-    private fun setupScreenStreaming() {
-        localRecordFile = File(context.externalCacheDir, "session_${sessionId}.mp4")
-
-        // Fixed constructor: context first, then likely a Boolean flag (try false first), then connectChecker
-        rtmpDisplay = RtmpDisplay(context, false, connectChecker)  // ← add false (or true) as 2nd param
-
-        // If the above still complains about types / missing params, try these variants one by one:
-        // rtmpDisplay = RtmpDisplay(context, connectChecker = connectChecker)          // if named args allowed & no Boolean
-        // rtmpDisplay = RtmpDisplay(context, true, connectChecker)                    // try true if false fails
-        // rtmpDisplay = RtmpDisplay(context, useOpus = false, connectChecker = connectChecker)  // if named
-
-        rtmpDisplay?.prepareVideo(1280, 720, 30)
-        rtmpDisplay?.prepareAudio(128 * 1024, 44100, true, false, false)  // stereo? last false = no echo cancel?
-
-        if (streamUrl != null) {
-            rtmpDisplay?.startStream(streamUrl!!)
-        } else {
-            rtmpDisplay?.startRecord(localRecordFile!!.absolutePath)
-        }
-    }
-
-    fun setMediaProjection(resultCode: Int, data: Intent?) {
-        if (data == null) return
-        mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data)
-        rtmpDisplay?.setIntentResult(resultCode, data)
-        Log.d(TAG, "MediaProjection set")
-    }
-
+    /**
+     * Pause the current session (stops recording temporarily).
+     */
     fun pauseSession() {
         if (!isStreaming || isPaused) return
         isPaused = true
         pauseStartMs = System.currentTimeMillis()
 
-        rtmpDisplay?.stopRecord()  // Pause by stopping record
+        genericStream?.let {
+            if (it.isRecording) it.stopRecord()
+        }
 
-        broadcastManager.sendBroadcast(Intent(ACTION_STREAMING_PAUSED))
-        Log.d(TAG, "Streaming paused")
+        broadcastManager.sendBroadcast(Intent(ACTION_STREAMING_PAUSED).apply {
+            putExtra("sessionId", sessionId)
+        })
+        Log.d(TAG, "Session paused")
     }
 
+    /**
+     * Resume the current session.
+     */
     fun resumeSession() {
         if (!isStreaming || !isPaused) return
         totalPausedMs += (System.currentTimeMillis() - pauseStartMs)
         isPaused = false
 
-        if (localRecordFile != null) {
-            rtmpDisplay?.startRecord(localRecordFile!!.absolutePath)  // Resume by restarting on same file (appends)
-        } else if (streamUrl != null) {
-            rtmpDisplay?.startStream(streamUrl!!)
+        if (localRecordFile != null && streamUrl == null) {
+            try {
+                genericStream?.startRecord(localRecordFile!!.absolutePath) { status ->
+                    Log.d(TAG, "Record status: $status")
+                }
+            } catch (e: IOException) {
+                Log.e(TAG, "Failed to resume recording: ${e.message}")
+            }
         }
 
-        broadcastManager.sendBroadcast(Intent(ACTION_STREAMING_RESUMED))
-        Log.d(TAG, "Streaming resumed")
+        broadcastManager.sendBroadcast(Intent(ACTION_STREAMING_RESUMED).apply {
+            putExtra("sessionId", sessionId)
+        })
+        Log.d(TAG, "Session resumed")
     }
 
+    /**
+     * Stop the current session and return results.
+     */
     fun stopSession(): SessionResult {
         val endTimeMs = System.currentTimeMillis()
         val activeDurationMs = (endTimeMs - sessionStartMs) - totalPausedMs
 
         gyroscopeSDK.stop()
-        rtmpDisplay?.stopStream()
-        rtmpDisplay?.stopRecord()
-        rtmpDisplay = null
+
+        genericStream?.let {
+            if (it.isStreaming) it.stopStream()
+            if (it.isRecording) it.stopRecord()
+            it.release()
+        }
+        genericStream = null
+
+        mediaProjection?.stop()
+        mediaProjection = null
 
         mainHandler.removeCallbacks(idleChecker)
         isStreaming = false
@@ -231,20 +293,240 @@ class StreamingSDK(
         gameId = null
         readingsBuffer.clear()
         localRecordFile = null
+        currentAudioMode = AudioMode.NONE
 
-        Log.d(TAG, "Session stopped. Duration: ${activeDurationMs}ms | Recorded: ${result.recordPath}")
+        Log.d(TAG, "Session stopped. Duration: ${activeDurationMs}ms")
         return result
     }
 
-    private fun _onGyroReading(data: GyroscopeSDK.GyroData) {
+    // ─── Audio Controls ─────────────────────────────────────────────
+
+    /**
+     * Mute/unmute the microphone.
+     * Works by switching the audio source on the fly:
+     *   - If both were active (MIXED) and mic is muted → switch to DEVICE_ONLY
+     *   - If mic was solo (MIC_ONLY) and muted → switch to NONE
+     *   - Unmuting reverses the above
+     */
+    fun setMicrophoneMuted(muted: Boolean) {
+        if (isMicMuted == muted) return
+        isMicMuted = muted
+        applyEffectiveAudioMode()
+        Log.d(TAG, "Microphone ${if (muted) "muted" else "unmuted"}")
+    }
+
+    /**
+     * Mute/unmute the device (game) audio.
+     * Works by switching the audio source on the fly.
+     */
+    fun setDeviceAudioMuted(muted: Boolean) {
+        if (isDeviceAudioMuted == muted) return
+        isDeviceAudioMuted = muted
+        applyEffectiveAudioMode()
+        Log.d(TAG, "Device audio ${if (muted) "muted" else "unmuted"}")
+    }
+
+    fun isMicrophoneMuted(): Boolean = isMicMuted
+    fun isDeviceAudioMuted(): Boolean = isDeviceAudioMuted
+
+    /**
+     * Switch audio source mode on the fly.
+     * This sets the base mode; mute flags are reset.
+     */
+    fun setAudioMode(mode: AudioMode) {
+        currentAudioMode = mode
+        isMicMuted = false
+        isDeviceAudioMuted = false
+        applyAudioSource(mode)
+    }
+
+    // ─── Query State ────────────────────────────────────────────────
+
+    fun isActive() = isStreaming
+    fun isSessionPaused() = isPaused
+    fun getSessionId() = sessionId
+    fun getBufferedReadings() = readingsBuffer.toList()
+    fun isStreamConnected(): Boolean = genericStream?.isStreaming == true
+
+    // ─── Private Implementation ─────────────────────────────────────
+
+    private fun setupStreaming(config: StreamConfig) {
+        val mp = mediaProjection
+        if (mp == null) {
+            Log.e(TAG, "MediaProjection not set! Call setMediaProjection() first.")
+            return
+        }
+
+        // GenericStream auto-detects protocol from URL (rtmp://, rtsp://, srt://)
+        val stream = GenericStream(context, connectChecker, NoVideoSource(), NoAudioSource())
+
+        // Force render ensures constant FPS even when screen content doesn't change
+        stream.getGlInterface().setForceRender(true, config.fps)
+
+        // Prepare video encoder
+        val videoReady = try {
+            stream.prepareVideo(
+                config.width,
+                config.height,
+                config.videoBitrate,
+                rotation = config.rotation
+            )
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "Video prepare failed: ${e.message}")
+            false
+        }
+
+        // Prepare audio encoder
+        val audioReady = try {
+            stream.prepareAudio(
+                config.sampleRate,
+                config.stereo,
+                config.audioBitrate
+            )
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "Audio prepare failed: ${e.message}")
+            false
+        }
+
+        if (!videoReady || !audioReady) {
+            Log.e(TAG, "Prepare failed (video=$videoReady, audio=$audioReady)")
+            stream.release()
+            return
+        }
+
+        // Video: screen capture via MediaProjection
+        try {
+            stream.changeVideoSource(ScreenSource(context, mp))
+            Log.d(TAG, "Video: Screen capture")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set screen source: ${e.message}")
+            stream.release()
+            return
+        }
+
+        // Audio: set initial audio source based on config
+        try {
+            if (config.enableAudio) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && config.enableDeviceAudio) {
+                    // Mixed audio: mic + game/device audio
+                    // MixAudioSource takes MediaProjection and internally handles both sources
+                    stream.changeAudioSource(MixAudioSource(mp))
+                    currentAudioMode = AudioMode.MIXED
+                    Log.d(TAG, "Audio: Mixed (mic + device)")
+                } else {
+                    // Microphone only
+                    stream.changeAudioSource(MicrophoneSource())
+                    currentAudioMode = AudioMode.MIC_ONLY
+                    Log.d(TAG, "Audio: Microphone only")
+                }
+            } else {
+                currentAudioMode = AudioMode.NONE
+                Log.d(TAG, "Audio: Disabled")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Audio source failed: ${e.message}. Continuing video-only.")
+            currentAudioMode = AudioMode.NONE
+        }
+
+        genericStream = stream
+
+        // Start streaming to URL or recording locally
+        if (streamUrl != null) {
+            stream.startStream(streamUrl!!)
+            Log.d(TAG, "Streaming to: $streamUrl")
+        } else {
+            localRecordFile = File(context.externalCacheDir, "session_${sessionId}.mp4")
+            try {
+                stream.startRecord(localRecordFile!!.absolutePath) { status ->
+                    Log.d(TAG, "Record status: $status")
+                }
+                Log.d(TAG, "Recording to: ${localRecordFile?.absolutePath}")
+            } catch (e: IOException) {
+                Log.e(TAG, "Failed to start recording: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Based on the current base audio mode + mute flags, determine
+     * which actual audio source to apply.
+     */
+    private fun applyEffectiveAudioMode() {
+        val effective = when (currentAudioMode) {
+            AudioMode.MIXED -> {
+                when {
+                    isMicMuted && isDeviceAudioMuted -> AudioMode.NONE
+                    isMicMuted -> AudioMode.DEVICE_ONLY
+                    isDeviceAudioMuted -> AudioMode.MIC_ONLY
+                    else -> AudioMode.MIXED
+                }
+            }
+            AudioMode.MIC_ONLY -> {
+                if (isMicMuted) AudioMode.NONE else AudioMode.MIC_ONLY
+            }
+            AudioMode.DEVICE_ONLY -> {
+                if (isDeviceAudioMuted) AudioMode.NONE else AudioMode.DEVICE_ONLY
+            }
+            AudioMode.NONE -> AudioMode.NONE
+        }
+        applyAudioSource(effective)
+    }
+
+    /**
+     * Actually switch the audio source on the GenericStream.
+     */
+    private fun applyAudioSource(mode: AudioMode) {
+        val stream = genericStream ?: return
+        val mp = mediaProjection ?: return
+
+        try {
+            when (mode) {
+                AudioMode.MIC_ONLY -> {
+                    stream.changeAudioSource(MicrophoneSource())
+                    Log.d(TAG, "Audio source → MIC_ONLY")
+                }
+                AudioMode.DEVICE_ONLY -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        stream.changeAudioSource(InternalAudioSource(mp))
+                        Log.d(TAG, "Audio source → DEVICE_ONLY")
+                    } else {
+                        Log.w(TAG, "Device audio requires Android 10+")
+                    }
+                }
+                AudioMode.MIXED -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        stream.changeAudioSource(MixAudioSource(mp))
+                        Log.d(TAG, "Audio source → MIXED")
+                    } else {
+                        stream.changeAudioSource(MicrophoneSource())
+                        Log.w(TAG, "Mixed audio requires Android 10+, using mic only")
+                    }
+                }
+                AudioMode.NONE -> {
+                    stream.changeAudioSource(NoAudioSource())
+                    Log.d(TAG, "Audio source → NONE")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to change audio source to $mode: ${e.message}")
+        }
+    }
+
+    private fun onGyroReading(data: GyroscopeSDK.GyroData) {
         if (!isStreaming) return
 
-        if (!data.isIdle) lastMovementMs = System.currentTimeMillis()
+        if (!data.isIdle) {
+            lastMovementMs = System.currentTimeMillis()
+            if (isIdle) {
+                isIdle = false
+                broadcastManager.sendBroadcast(Intent(ACTION_GYRO_ACTIVE).apply {
+                    putExtra("sessionId", sessionId)
+                })
+            }
+        }
 
         val reading = ReadingData(
-            x = data.x,
-            y = data.y,
-            z = data.z,
+            x = data.x, y = data.y, z = data.z,
             timestampNs = data.timestampNs,
             timestampMs = System.currentTimeMillis(),
             isIdle = data.isIdle
@@ -262,27 +544,34 @@ class StreamingSDK(
         })
     }
 
+    // ─── Data Classes ───────────────────────────────────────────────
+
     data class ReadingData(
-        val x: Float,
-        val y: Float,
-        val z: Float,
-        val timestampNs: Long,
-        val timestampMs: Long,
-        val isIdle: Boolean
+        val x: Float, val y: Float, val z: Float,
+        val timestampNs: Long, val timestampMs: Long, val isIdle: Boolean
     )
 
     data class SessionResult(
-        val sessionId: String,
-        val gameId: String,
-        val startTimeMs: Long,
-        val endTimeMs: Long,
-        val durationMs: Long,
-        val totalReadings: Int,
-        val readings: List<ReadingData>,
+        val sessionId: String, val gameId: String,
+        val startTimeMs: Long, val endTimeMs: Long, val durationMs: Long,
+        val totalReadings: Int, val readings: List<ReadingData>,
         val recordPath: String? = null
     )
 
-    fun isActive() = isStreaming
-    fun getSessionId() = sessionId
-    fun getBufferedReadings() = readingsBuffer.toList()
+    data class StreamConfig(
+        val width: Int = DEFAULT_WIDTH,
+        val height: Int = DEFAULT_HEIGHT,
+        val fps: Int = DEFAULT_FPS,
+        val videoBitrate: Int = DEFAULT_BITRATE,
+        val audioBitrate: Int = DEFAULT_AUDIO_BITRATE,
+        val sampleRate: Int = DEFAULT_SAMPLE_RATE,
+        val stereo: Boolean = true,
+        val rotation: Int = DEFAULT_ROTATION,
+        val enableAudio: Boolean = true,
+        val enableDeviceAudio: Boolean = true
+    )
+
+    enum class AudioMode {
+        MIC_ONLY, DEVICE_ONLY, MIXED, NONE
+    }
 }

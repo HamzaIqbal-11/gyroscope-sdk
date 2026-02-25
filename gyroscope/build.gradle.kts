@@ -43,18 +43,11 @@ dependencies {
     implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
     implementation("androidx.core:core-ktx:1.13.1")
 
-    // This should now resolve correctly because JitPack is first in settings
-    implementation("com.github.BilalFarooq05.RootEncoder:library:v2.6.7-audio-mix")
-    implementation("com.github.BilalFarooq05.RootEncoder:extra-sources:v2.6.7-audio-mix")
+    // ✅ Official RootEncoder 2.6.7 (confirmed working on JitPack)
+    implementation("com.github.pedroSG94.RootEncoder:library:2.6.7")
 
-    // Uncomment only if you actually need special camera sources
+    // Optional: only needed if you use CameraXSource or CameraUvcSource
     // implementation("com.github.pedroSG94.RootEncoder:extra-sources:2.6.7")
-
-    implementation("com.google.firebase:firebase-messaging-directboot:20.2.0")
-    implementation("androidx.emoji2:emoji2:1.5.0")
-    implementation("androidx.emoji2:emoji2-bundled:1.5.0")
-
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 afterEvaluate {
