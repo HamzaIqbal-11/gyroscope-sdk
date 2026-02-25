@@ -45,6 +45,8 @@ dependencies {
 
     // This should now resolve correctly because JitPack is first in settings
     implementation("com.github.pedroSG94.RootEncoder:library:2.6.7")
+    // If you use extra camera sources (most people don't):
+     implementation("com.github.pedroSG94.RootEncoder:extra-sources:2.6.7")
 
     // Uncomment only if you actually need special camera sources
     // implementation("com.github.pedroSG94.RootEncoder:extra-sources:2.6.7")
