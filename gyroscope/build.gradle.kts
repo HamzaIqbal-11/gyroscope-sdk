@@ -36,12 +36,11 @@ android {
 }
 
 dependencies {
-    dependencies {
-        implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
-        implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
+    implementation("androidx.core:core-ktx:1.13.1")
 
-        implementation("com.github.pedroSG94.RootEncoder:library:2.6.7")
-    }
+    // Pedro library – confirmed working version 2.6.7 (latest stable tag)
+    implementation("com.github.pedroSG94.RootEncoder:library:2.6.7")
 }
 
 afterEvaluate {
@@ -52,7 +51,7 @@ afterEvaluate {
 
                 groupId = "com.github.HamzaIqbal-11"
                 artifactId = "gyroscope-sdk"
-                // No version = "..." here – JitPack uses the git tag
+                // No hardcoded version – JitPack uses git tag
             }
         }
     }
