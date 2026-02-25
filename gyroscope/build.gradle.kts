@@ -47,7 +47,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
 
     // The critical dependency — should now resolve with JitPack first
-    implementation("com.github.pedroSG94.RootEncoder:library:2.6.7")
+    implementation("com.github.pedroSG94.RootEncoder:library:2.6.6")
 
     // If you need camera2 / external sources (uncomment if actually used)
     // implementation("com.github.pedroSG94.RootEncoder:extra-sources:2.6.7")
