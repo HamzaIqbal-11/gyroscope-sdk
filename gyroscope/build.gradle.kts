@@ -36,10 +36,12 @@ android {
 }
 
 dependencies {
-    implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
-    implementation("androidx.core:core-ktx:1.13.1")
+    dependencies {
+        implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
+        implementation("androidx.core:core-ktx:1.13.1")
 
-    implementation("com.github.pedroSG94.RootEncoder:library:2.7.7")
+        implementation("com.github.pedroSG94.RootEncoder:library:2.6.7")
+    }
 }
 
 afterEvaluate {
