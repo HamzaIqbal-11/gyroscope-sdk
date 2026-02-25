@@ -35,24 +35,13 @@ android {
     }
 }
 
-repositories {
-    google()
-    mavenCentral()
-    maven { url = uri("https://jitpack.io") }   // ← yeh bohot zaroori hai
-}
-
 dependencies {
     implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
-    implementation("androidx.core:core-ktx:1.13.1")   // thoda updated version
+    implementation("androidx.core:core-ktx:1.13.1")
 
-    // Pedro RTMP/RTSP library – latest stable version jitpack ke hisaab se
     implementation("com.github.pedroSG94.RootEncoder:library:2.7.7")
-
-    // Agar sirf RTMP chahiye to yeh bhi try kar sakte ho (smaller size)
-    // implementation("com.github.pedroSG94.RootEncoder:rtmp:2.7.7")
 }
 
-// Publishing block – version hard-code mat karo, jitpack tag se lega
 afterEvaluate {
     publishing {
         publications {
@@ -61,7 +50,7 @@ afterEvaluate {
 
                 groupId = "com.github.HamzaIqbal-11"
                 artifactId = "gyroscope-sdk"
-                // version = "1.0.7"   ← yeh line comment out ya hata do
+                // No version = "..." here – JitPack uses the git tag
             }
         }
     }
