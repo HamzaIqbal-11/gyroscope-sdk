@@ -82,7 +82,14 @@ class FaceRecognitionActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Fullscreen
+        // Get params from intent
+        playerId = intent.getStringExtra(EXTRA_PLAYER_ID) ?: ""
+        apiUrl = intent.getStringExtra(EXTRA_API_URL) ?: ""
+        streamKey = intent.getStringExtra(EXTRA_STREAM_KEY) ?: ""
+
+        buildUI()  // ← PEHLE setContentView
+
+        // Fullscreen BAAD mein
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.insetsController?.hide(WindowInsets.Type.statusBars())
         } else {
@@ -93,17 +100,8 @@ class FaceRecognitionActivity : Activity() {
             )
         }
 
-        // Get params from intent
-        playerId = intent.getStringExtra(EXTRA_PLAYER_ID) ?: ""
-        apiUrl = intent.getStringExtra(EXTRA_API_URL) ?: ""
-        streamKey = intent.getStringExtra(EXTRA_STREAM_KEY) ?: ""
-
-        Log.d(TAG, "FaceRecognition opened: playerId=$playerId, apiUrl=$apiUrl")
-
-        buildUI()
         checkCameraPermission()
     }
-
     // ── Build UI Programmatically ────────────────────────────────────────────
 
     private fun buildUI() {
