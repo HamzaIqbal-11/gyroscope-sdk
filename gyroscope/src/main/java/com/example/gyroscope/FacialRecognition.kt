@@ -695,15 +695,9 @@ import java.net.URL
  *
  * Native Activity opened by SDK — full camera screen for face capture.
  * - Shows camera preview with face guide overlay + capture button
- * - On capture → sends to backend → waits for response
- * - On error → stays on screen, shows error, user can retry
- * - Only exits on: face_saved, face_exists, or user manually cancels
- *
- * Usage from Flutter:
- *   await _overlayChannel.invokeMethod('openFaceRecognition', {
- *     'playerId': '14086',
- *     'apiUrl': 'https://your-backend.com/app/face/verify',
- *   });
+ * - On capture → resizes + compresses → sends to backend
+ * - On error → stays on screen, shows friendly error, user can retry
+ * - Only exits on: face_saved, face_exists, verified, success
  */
 class FaceRecognitionActivity : Activity() {
 
@@ -720,9 +714,13 @@ class FaceRecognitionActivity : Activity() {
         const val RESULT_ERROR = "error"
         const val RESULT_MESSAGE = "message"
 
-        // Backend timeout (face analysis can take time)
+        // Backend timeout
         private const val CONNECT_TIMEOUT_MS = 60_000   // 60 seconds
         private const val READ_TIMEOUT_MS = 120_000      // 2 minutes
+
+        // Image resize (face recognition doesn't need HD)
+        private const val MAX_IMAGE_WIDTH = 480
+        private const val JPEG_QUALITY = 40
     }
 
     // ── Camera ───────────────────────────────────────────────────────────────
@@ -737,7 +735,6 @@ class FaceRecognitionActivity : Activity() {
     private lateinit var textureView: TextureView
     private lateinit var overlayView: FaceGuideOverlay
     private lateinit var captureButton: FrameLayout
-    private lateinit var statusText: TextView
     private lateinit var instructionText: TextView
     private lateinit var loaderLayout: FrameLayout
     private lateinit var loaderText: TextView
@@ -789,7 +786,7 @@ class FaceRecognitionActivity : Activity() {
             setBackgroundColor(Color.BLACK)
         }
 
-        // ── 1. Camera preview (TextureView) ──
+        // ── 1. Camera preview ──
         textureView = TextureView(this).apply {
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -798,7 +795,7 @@ class FaceRecognitionActivity : Activity() {
         }
         root.addView(textureView)
 
-        // ── 2. Face guide overlay (dark borders + clear center box + grid) ──
+        // ── 2. Face guide overlay ──
         overlayView = FaceGuideOverlay(this).apply {
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -807,7 +804,7 @@ class FaceRecognitionActivity : Activity() {
         }
         root.addView(overlayView)
 
-        // ── 3. Error banner (hidden initially — shows on error, allows retry) ──
+        // ── 3. Error banner (hidden initially) ──
         errorBanner = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -828,7 +825,6 @@ class FaceRecognitionActivity : Activity() {
             }
         }
 
-        // Error icon
         val errorIcon = TextView(this).apply {
             text = "⚠️"
             textSize = 20f
@@ -836,7 +832,6 @@ class FaceRecognitionActivity : Activity() {
         }
         errorBanner.addView(errorIcon)
 
-        // Error text
         errorText = TextView(this).apply {
             text = ""
             setTextColor(Color.WHITE)
@@ -845,7 +840,6 @@ class FaceRecognitionActivity : Activity() {
         }
         errorBanner.addView(errorText)
 
-        // Retry button inside error banner
         retryButton = TextView(this).apply {
             text = "RETRY"
             setTextColor(Color.parseColor("#FF6B6B"))
@@ -861,7 +855,7 @@ class FaceRecognitionActivity : Activity() {
 
         root.addView(errorBanner)
 
-        // ── 4. Bottom panel (instruction + capture button) ──
+        // ── 4. Bottom panel ──
         val bottomPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -874,7 +868,6 @@ class FaceRecognitionActivity : Activity() {
             )
         }
 
-        // Instruction text
         instructionText = TextView(this).apply {
             text = "Fit your face in the box"
             setTextColor(Color.WHITE)
@@ -885,7 +878,6 @@ class FaceRecognitionActivity : Activity() {
         }
         bottomPanel.addView(instructionText)
 
-        // Capture button (outer ring + inner white circle)
         captureButton = FrameLayout(this).apply {
             val size = dp(72)
             layoutParams = LinearLayout.LayoutParams(size, size).apply {
@@ -916,7 +908,7 @@ class FaceRecognitionActivity : Activity() {
 
         root.addView(bottomPanel)
 
-        // ── 5. Back button (top left) ──
+        // ── 5. Back button ──
         val backButton = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
             setColorFilter(Color.WHITE)
@@ -932,7 +924,7 @@ class FaceRecognitionActivity : Activity() {
         }
         root.addView(backButton)
 
-        // ── 6. Loading overlay (hidden initially) ──
+        // ── 6. Loading overlay ──
         loaderLayout = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#80000000"))
             visibility = View.GONE
@@ -995,7 +987,6 @@ class FaceRecognitionActivity : Activity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startCamera()
             } else {
-                // Don't exit — show error, user can grant from settings
                 showError("Camera permission required. Please grant it in Settings.")
             }
         }
@@ -1072,13 +1063,13 @@ class FaceRecognitionActivity : Activity() {
                     Log.e(TAG, "Camera error: $error")
                     camera.close()
                     cameraDevice = null
-                    mainHandler.post { showError("Camera error ($error). Please try again.") }
+                    mainHandler.post { showError("Something went wrong. Please try again.") }
                 }
             }, cameraHandler)
 
         } catch (e: Exception) {
             Log.e(TAG, "Camera open failed: ${e.message}")
-            showError("Camera error: ${e.message}")
+            showError("Something went wrong. Please try again.")
         }
     }
 
@@ -1109,7 +1100,7 @@ class FaceRecognitionActivity : Activity() {
                     }
                     override fun onConfigureFailed(session: CameraCaptureSession) {
                         Log.e(TAG, "Session config failed")
-                        mainHandler.post { showError("Camera setup failed. Please try again.") }
+                        mainHandler.post { showError("Something went wrong. Please try again.") }
                     }
                 },
                 cameraHandler
@@ -1157,7 +1148,7 @@ class FaceRecognitionActivity : Activity() {
             isCapturing = false
             mainHandler.post {
                 showLoader(false)
-                showError("Capture failed: ${e.message}")
+                showError("Something went wrong. Please try again.")
             }
         }
     }
@@ -1166,12 +1157,22 @@ class FaceRecognitionActivity : Activity() {
 
     private fun sendToBackend(jpegBytes: ByteArray) {
         try {
-            // Compress
-            val bitmap = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
+            // ── Resize + compress (keeps image small for backend) ──
+            val original = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
+
+            val scale = if (original.width > MAX_IMAGE_WIDTH) MAX_IMAGE_WIDTH.toFloat() / original.width else 1f
+            val resized = Bitmap.createScaledBitmap(
+                original,
+                (original.width * scale).toInt(),
+                (original.height * scale).toInt(),
+                true
+            )
+            original.recycle()
+
             val outputStream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
+            resized.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, outputStream)
             val compressedBytes = outputStream.toByteArray()
-            bitmap.recycle()
+            resized.recycle()
 
             val base64Image = Base64.encodeToString(compressedBytes, Base64.NO_WRAP)
 
@@ -1182,8 +1183,8 @@ class FaceRecognitionActivity : Activity() {
             connection.requestMethod = "POST"
             connection.setRequestProperty("Content-Type", "application/json")
             connection.doOutput = true
-            connection.connectTimeout = CONNECT_TIMEOUT_MS    // 60 seconds
-            connection.readTimeout = READ_TIMEOUT_MS          // 120 seconds
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            connection.readTimeout = READ_TIMEOUT_MS
 
             val jsonPayload = """
                 {
@@ -1234,67 +1235,47 @@ class FaceRecognitionActivity : Activity() {
             mainHandler.post {
                 showLoader(false)
                 isCapturing = false
-                showError("Cannot reach server. Please try again later.")
+                showError("Something went wrong. Please try again.")
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error: ${e.message}")
             mainHandler.post {
                 showLoader(false)
                 isCapturing = false
-                showError("Something went wrong: ${e.message}")
+                showError("Something went wrong. Please try again.")
             }
         }
     }
 
     // ── Handle Backend Response ──────────────────────────────────────────────
 
-    /**
-     * Decides whether to EXIT or STAY based on backend response.
-     *
-     * EXIT only when:
-     *   - face_saved (new face registered successfully)
-     *   - face_exists (face already registered)
-     *   - HTTP 200 with success
-     *
-     * STAY (show error + retry) when:
-     *   - Any HTTP error (4xx, 5xx)
-     *   - face_not_detected
-     *   - face_mismatch
-     *   - Any other error
-     */
     private fun handleBackendResponse(responseCode: Int, responseBody: String) {
         try {
             val bodyLower = responseBody.lowercase()
 
-            // ── SUCCESS cases → exit activity ──
+            // ── SUCCESS → exit activity ──
             if (responseCode in 200..299) {
                 when {
                     bodyLower.contains("face_saved") || bodyLower.contains("face saved") -> {
-                        Log.d(TAG, "✅ Face saved — closing")
                         showSuccessAndExit("Face registered successfully!", responseBody)
                         return
                     }
                     bodyLower.contains("face_exists") || bodyLower.contains("face exists") ||
                             bodyLower.contains("already") -> {
-                        Log.d(TAG, "✅ Face already exists — closing")
                         showSuccessAndExit("Face already registered!", responseBody)
                         return
                     }
                     bodyLower.contains("success") || bodyLower.contains("verified") ||
                             bodyLower.contains("matched") -> {
-                        Log.d(TAG, "✅ Face verified — closing")
                         showSuccessAndExit("Face verified!", responseBody)
                         return
                     }
                 }
-
-                // Generic 200 but no known success keyword — still exit
-                Log.d(TAG, "✅ HTTP 200 OK — closing")
                 showSuccessAndExit("Done!", responseBody)
                 return
             }
 
-            // ── STAY cases → show error, allow retry ──
+            // ── ERROR → stay on screen, friendly message, retry ──
             when {
                 bodyLower.contains("face_not_detected") || bodyLower.contains("no face") -> {
                     showError("No face detected. Please fit your face in the box and try again.")
@@ -1308,36 +1289,19 @@ class FaceRecognitionActivity : Activity() {
                 bodyLower.contains("too_dark") || bodyLower.contains("dark") -> {
                     showError("Image is too dark. Move to better lighting and try again.")
                 }
-                responseCode == 400 -> {
-                    showError("Bad request. Please try again.")
-                }
-                responseCode == 401 || responseCode == 403 -> {
-                    showError("Not authorized. Please check your credentials.")
-                }
-                responseCode == 404 -> {
-                    showError("Server endpoint not found. Please contact support.")
-                }
-                responseCode == 500 -> {
-                    showError("Server error. Please try again later.")
-                }
-                responseCode == 503 -> {
-                    showError("Server is busy. Please wait and try again.")
-                }
                 else -> {
-                    showError("Error (HTTP $responseCode). Please try again.")
+                    showError("Something went wrong. Please try again.")
                 }
             }
 
         } catch (e: Exception) {
-            Log.e(TAG, "Response parsing error: ${e.message}")
-            showError("Unexpected error. Please try again.")
+            showError("Something went wrong. Please try again.")
         }
     }
 
-    // ── Success → brief toast + exit ─────────────────────────────────────────
+    // ── Success → brief banner + exit ────────────────────────────────────────
 
     private fun showSuccessAndExit(displayMessage: String, rawResponse: String) {
-        // Show green success banner briefly, then exit
         errorBanner.visibility = View.VISIBLE
         errorBanner.background = android.graphics.drawable.GradientDrawable().apply {
             shape = android.graphics.drawable.GradientDrawable.RECTANGLE
@@ -1347,7 +1311,6 @@ class FaceRecognitionActivity : Activity() {
         errorText.text = "✅  $displayMessage"
         retryButton.visibility = View.GONE
 
-        // Exit after 1.5 seconds so user sees the success message
         mainHandler.postDelayed({
             val resultIntent = Intent().apply {
                 putExtra(RESULT_SUCCESS, true)
@@ -1371,7 +1334,6 @@ class FaceRecognitionActivity : Activity() {
         retryButton.visibility = View.VISIBLE
         instructionText.text = "Try again"
 
-        // Auto-hide error after 8 seconds
         mainHandler.postDelayed({ hideError() }, 8000)
     }
 
@@ -1407,10 +1369,7 @@ class FaceRecognitionActivity : Activity() {
         }
     }
 
-    // ── Back button behavior — don't exit easily ─────────────────────────────
-
     override fun onBackPressed() {
-        // User pressed back — let them cancel but confirm
         setResult(RESULT_CANCELED)
         finish()
     }
