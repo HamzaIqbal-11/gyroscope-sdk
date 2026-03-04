@@ -1,6 +1,5 @@
 package com.example.gyroscope.kyc
 
-
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
@@ -38,12 +37,8 @@ class KycDocSelectionActivity : Activity() {
         playerId = intent.getStringExtra(EXTRA_PLAYER_ID) ?: ""
         headersBundle = intent.getBundleExtra(EXTRA_HEADERS)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.insetsController?.hide(WindowInsets.Type.statusBars())
-        } else {
-            @Suppress("DEPRECATION")
-            window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN)
-        }
+        @Suppress("DEPRECATION")
+        window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN)
 
         buildUI()
     }

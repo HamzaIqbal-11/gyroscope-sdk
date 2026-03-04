@@ -1,7 +1,5 @@
 package com.example.gyroscope.kyc
 
-
-
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -14,6 +12,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
+import android.util.Size
 import android.view.*
 import android.widget.*
 import java.io.File
@@ -77,12 +76,8 @@ class KycDocCaptureActivity : Activity() {
         headersBundle = intent.getBundleExtra(EXTRA_HEADERS)
         docType = intent.getStringExtra(EXTRA_DOC_TYPE) ?: ""
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.insetsController?.hide(WindowInsets.Type.statusBars())
-        } else {
-            @Suppress("DEPRECATION")
-            window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN)
-        }
+        @Suppress("DEPRECATION")
+        window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN)
 
         buildUI()
         startCameraThread()
