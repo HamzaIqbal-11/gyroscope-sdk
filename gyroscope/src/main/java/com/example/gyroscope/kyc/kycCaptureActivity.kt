@@ -31,18 +31,12 @@ class KycDocCaptureActivity : Activity() {
     companion object {
         private const val TAG = "KycDocCapture"
 
-        const val EXTRA_API_URL = "kycApiUrl"
-        const val EXTRA_PLAYER_ID = "kycPlayerId"
-        const val EXTRA_HEADERS = "kycHeaders"
         const val EXTRA_DOC_TYPE = "kycDocType"
 
         private const val RC_REVIEW = 5020
     }
 
     // Config
-    private var apiUrl = ""
-    private var playerId = ""
-    private var headersBundle: Bundle? = null
     private var docType = ""
 
     // Camera2
@@ -71,9 +65,6 @@ class KycDocCaptureActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        apiUrl = intent.getStringExtra(EXTRA_API_URL) ?: ""
-        playerId = intent.getStringExtra(EXTRA_PLAYER_ID) ?: ""
-        headersBundle = intent.getBundleExtra(EXTRA_HEADERS)
         docType = intent.getStringExtra(EXTRA_DOC_TYPE) ?: ""
 
         @Suppress("DEPRECATION")
@@ -412,10 +403,7 @@ class KycDocCaptureActivity : Activity() {
 
     private fun navigateToReview() {
         val intent = Intent(this, KycDocReviewActivity::class.java).apply {
-            putExtra(KycDocReviewActivity.EXTRA_API_URL, apiUrl)
-            putExtra(KycDocReviewActivity.EXTRA_PLAYER_ID, playerId)
             putExtra(KycDocReviewActivity.EXTRA_DOC_TYPE, docType)
-            putExtra(KycDocReviewActivity.EXTRA_HEADERS, headersBundle)
             putExtra(KycDocReviewActivity.EXTRA_FRONT_IMAGE, frontImagePath)
             if (backImagePath != null) {
                 putExtra(KycDocReviewActivity.EXTRA_BACK_IMAGE, backImagePath)
@@ -428,7 +416,7 @@ class KycDocCaptureActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == RC_REVIEW) {
             if (resultCode == RESULT_OK) {
-                // Upload success → pass back
+                // Confirmed → pass file paths back
                 setResult(RESULT_OK, data)
                 finish()
             } else {

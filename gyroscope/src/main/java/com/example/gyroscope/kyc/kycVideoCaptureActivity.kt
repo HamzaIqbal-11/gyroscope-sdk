@@ -35,20 +35,11 @@ class KycVideoCaptureActivity : Activity() {
     companion object {
         private const val TAG = "KycVideoCapture"
 
-        const val EXTRA_API_URL = "kycApiUrl"
-        const val EXTRA_PLAYER_ID = "kycPlayerId"
-        const val EXTRA_HEADERS = "kycHeaders"
-
         private const val RC_REVIEW = 5030
         private const val RC_AUDIO_PERM = 5031
         private const val COUNTDOWN_SECONDS = 3
         private const val RECORDING_SECONDS = 5
     }
-
-    // Config
-    private var apiUrl = ""
-    private var playerId = ""
-    private var headersBundle: Bundle? = null
 
     // Camera2
     private var cameraDevice: CameraDevice? = null
@@ -78,10 +69,6 @@ class KycVideoCaptureActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        apiUrl = intent.getStringExtra(EXTRA_API_URL) ?: ""
-        playerId = intent.getStringExtra(EXTRA_PLAYER_ID) ?: ""
-        headersBundle = intent.getBundleExtra(EXTRA_HEADERS)
 
         @Suppress("DEPRECATION")
         window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN)
@@ -617,9 +604,6 @@ class KycVideoCaptureActivity : Activity() {
 
             // Navigate to review
             val intent = Intent(this, KycVideoReviewActivity::class.java).apply {
-                putExtra(KycVideoReviewActivity.EXTRA_API_URL, apiUrl)
-                putExtra(KycVideoReviewActivity.EXTRA_PLAYER_ID, playerId)
-                putExtra(KycVideoReviewActivity.EXTRA_HEADERS, headersBundle)
                 putExtra(KycVideoReviewActivity.EXTRA_VIDEO_PATH, videoFilePath)
             }
             startActivityForResult(intent, RC_REVIEW)
@@ -648,7 +632,7 @@ class KycVideoCaptureActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == RC_REVIEW) {
             if (resultCode == RESULT_OK) {
-                // Upload success
+                // Confirmed → pass video path back
                 setResult(RESULT_OK, data)
                 finish()
             } else {
