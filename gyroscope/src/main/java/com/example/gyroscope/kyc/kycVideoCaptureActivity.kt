@@ -320,9 +320,9 @@ class KycVideoCaptureActivity : Activity() {
         // ── Bottom panel ──
         val bottomPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.parseColor("#CC000000"))
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(16), dp(12), dp(16), dp(28))
+            setPadding(dp(16), dp(12), dp(16), dp(16))
             layoutParams = FrameLayout.LayoutParams(MATCH, WRAP).apply {
                 gravity = Gravity.BOTTOM
             }
@@ -341,7 +341,7 @@ class KycVideoCaptureActivity : Activity() {
             setTextColor(Color.parseColor("#B0B0B0"))
             textSize = 14f
             gravity = Gravity.CENTER
-            setPadding(0, dp(8), 0, dp(28))
+            setPadding(0, dp(8), 0, dp(16))
         })
 
         // Record button

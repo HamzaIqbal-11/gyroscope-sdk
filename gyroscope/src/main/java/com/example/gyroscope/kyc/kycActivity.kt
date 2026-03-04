@@ -48,7 +48,6 @@ class KycActivity : Activity() {
     private lateinit var rootLayout: FrameLayout
     private lateinit var docStatusView: TextView
     private lateinit var videoStatusView: TextView
-    private lateinit var submitBtn: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -174,27 +173,6 @@ class KycActivity : Activity() {
         replaceLastChild(videoCard, videoStatusView)
         content.addView(videoCard)
 
-        content.addView(spacer(dp(32)))
-
-        // ── Submit Button ──
-        submitBtn = TextView(this).apply {
-            text = "SUBMIT"
-            setTextColor(Color.WHITE)
-            textSize = 16f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            setPadding(0, dp(16), 0, dp(16))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(16).toFloat()
-                setColor(Color.parseColor("#333333"))
-            }
-            layoutParams = lp(MATCH, WRAP)
-            isEnabled = false
-            alpha = 0.4f
-            setOnClickListener { returnResults() }
-        }
-        content.addView(submitBtn)
-
         scroll.addView(content)
         rootLayout.addView(scroll)
         setContentView(rootLayout)
@@ -256,17 +234,14 @@ class KycActivity : Activity() {
                 videoStatusView.text = "✅"
             }
         }
-        updateSubmitButton()
+        updateAndCheckDone()
     }
 
-    private fun updateSubmitButton() {
+    private fun updateAndCheckDone() {
+        // Both captured → auto return to Flutter
         if (frontPhotoPath != null && selfieVideoPath != null) {
-            submitBtn.isEnabled = true
-            submitBtn.alpha = 1.0f
-            submitBtn.background = GradientDrawable().apply {
-                cornerRadius = dp(16).toFloat()
-                setColor(Color.parseColor("#667EEA"))
-            }
+            Log.d(TAG, "Both done — auto returning")
+            returnResults()
         }
     }
 

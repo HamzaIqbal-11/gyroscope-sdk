@@ -147,9 +147,9 @@ class KycDocCaptureActivity : Activity() {
         // ── Bottom controls ──
         val bottomPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.parseColor("#CC000000"))
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(16), dp(16), dp(16), dp(30))
+            setPadding(dp(16), dp(12), dp(16), dp(16))
             layoutParams = FrameLayout.LayoutParams(MATCH, WRAP).apply {
                 gravity = Gravity.BOTTOM
             }
