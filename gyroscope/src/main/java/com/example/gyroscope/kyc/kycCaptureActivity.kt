@@ -149,10 +149,18 @@ class KycDocCaptureActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.parseColor("#CC000000"))
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(16), dp(12), dp(16), dp(16))
+            setPadding(dp(16), dp(12), dp(16), dp(48)) // fallback padding
             layoutParams = FrameLayout.LayoutParams(MATCH, WRAP).apply {
                 gravity = Gravity.BOTTOM
             }
+        }
+
+        // Adjust bottom padding for navigation bar
+        root.setOnApplyWindowInsetsListener { _, insets ->
+            @Suppress("DEPRECATION")
+            val navHeight = insets.systemWindowInsetBottom
+            bottomPanel.setPadding(dp(16), dp(12), dp(16), navHeight + dp(12))
+            insets
         }
 
         bottomPanel.addView(TextView(this).apply {
