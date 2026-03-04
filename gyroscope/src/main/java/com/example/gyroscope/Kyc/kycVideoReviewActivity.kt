@@ -1,0 +1,4 @@
+package com.example.gyroscope.Kyc
+
+class kycVideoReviewActivity {
+}
