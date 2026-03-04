@@ -1,8 +1,10 @@
 package com.example.gyroscope.kyc
 
 import android.app.Activity
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.*
 import android.graphics.drawable.GradientDrawable
 import android.hardware.camera2.*
@@ -38,6 +40,7 @@ class KycVideoCaptureActivity : Activity() {
         const val EXTRA_HEADERS = "kycHeaders"
 
         private const val RC_REVIEW = 5030
+        private const val RC_AUDIO_PERM = 5031
         private const val COUNTDOWN_SECONDS = 3
         private const val RECORDING_SECONDS = 5
     }
@@ -67,6 +70,10 @@ class KycVideoCaptureActivity : Activity() {
     private lateinit var recordBtnOuter: FrameLayout
     private lateinit var recordBtnBorder: GradientDrawable
 
+    // Permission overlay
+    private var permissionOverlay: FrameLayout? = null
+    private var permissionBlocked = false
+
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,10 +88,155 @@ class KycVideoCaptureActivity : Activity() {
 
         buildUI()
         startCameraThread()
+
+        // Check mic permission immediately
+        checkMicPermission()
+    }
+
+    private fun checkMicPermission() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            permissionBlocked = true
+            showPermissionOverlay()
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), RC_AUDIO_PERM)
+        } else {
+            permissionBlocked = false
+            hidePermissionOverlay()
+        }
+    }
+
+    private fun showPermissionOverlay() {
+        if (permissionOverlay != null) return
+
+        permissionOverlay = FrameLayout(this).apply {
+            setBackgroundColor(Color.parseColor("#E6000000"))
+            isClickable = true  // block touches behind
+
+            val card = LinearLayout(this@KycVideoCaptureActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(60, 50, 60, 50)
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#1A1A3E"))
+                    cornerRadius = 32f
+                    setStroke(2, Color.parseColor("#FF6B6B"))
+                }
+
+                // Icon
+                val icon = TextView(this@KycVideoCaptureActivity).apply {
+                    text = "\uD83C\uDFA4" // microphone emoji
+                    textSize = 40f
+                    gravity = Gravity.CENTER
+                }
+                addView(icon)
+
+                // Title
+                val title = TextView(this@KycVideoCaptureActivity).apply {
+                    text = "Microphone Permission Required"
+                    setTextColor(Color.WHITE)
+                    textSize = 18f
+                    gravity = Gravity.CENTER
+                    setPadding(0, 24, 0, 12)
+                    paint.isFakeBoldText = true
+                }
+                addView(title)
+
+                // Description
+                val desc = TextView(this@KycVideoCaptureActivity).apply {
+                    text = "You need to speak a sentence during the video recording. Please allow microphone access to continue."
+                    setTextColor(Color.parseColor("#AAAAAA"))
+                    textSize = 14f
+                    gravity = Gravity.CENTER
+                    setPadding(0, 0, 0, 30)
+                }
+                addView(desc)
+
+                // Allow button
+                val allowBtn = TextView(this@KycVideoCaptureActivity).apply {
+                    text = "GRANT PERMISSION"
+                    setTextColor(Color.WHITE)
+                    textSize = 15f
+                    gravity = Gravity.CENTER
+                    setPadding(0, 28, 0, 28)
+                    paint.isFakeBoldText = true
+                    background = GradientDrawable().apply {
+                        setColor(Color.parseColor("#667EEA"))
+                        cornerRadius = 16f
+                    }
+                    setOnClickListener {
+                        if (shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
+                            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), RC_AUDIO_PERM)
+                        } else {
+                            // User selected "Don't ask again" — go to app settings
+                            try {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                intent.data = android.net.Uri.parse("package:$packageName")
+                                startActivity(intent)
+                            } catch (_: Exception) {}
+                        }
+                    }
+                }
+                val btnParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                addView(allowBtn, btnParams)
+
+                // Cancel button
+                val cancelBtn = TextView(this@KycVideoCaptureActivity).apply {
+                    text = "Go Back"
+                    setTextColor(Color.parseColor("#888888"))
+                    textSize = 13f
+                    gravity = Gravity.CENTER
+                    setPadding(0, 24, 0, 0)
+                    setOnClickListener {
+                        setResult(Activity.RESULT_CANCELED)
+                        finish()
+                    }
+                }
+                addView(cancelBtn)
+            }
+
+            val cardParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER
+                marginStart = 48
+                marginEnd = 48
+            }
+            addView(card, cardParams)
+        }
+
+        // Add overlay on top of everything
+        val root = window.decorView.findViewById<FrameLayout>(android.R.id.content)
+        root.addView(permissionOverlay, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+    }
+
+    private fun hidePermissionOverlay() {
+        permissionOverlay?.let {
+            val root = window.decorView.findViewById<FrameLayout>(android.R.id.content)
+            root.removeView(it)
+            permissionOverlay = null
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == RC_AUDIO_PERM) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                permissionBlocked = false
+                hidePermissionOverlay()
+            }
+            // If denied, overlay stays — user must grant or go back
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        // Recheck permission (user may have granted in settings)
+        if (permissionBlocked) {
+            checkMicPermission()
+        }
         if (textureView?.isAvailable == true) {
             openCamera()
         }
@@ -333,7 +485,7 @@ class KycVideoCaptureActivity : Activity() {
     // ── Recording ────────────────────────────────────────────────────────────
 
     private fun onRecordPressed() {
-        if (isRecording) return
+        if (isRecording || permissionBlocked) return
         startCountdown()
     }
 
