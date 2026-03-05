@@ -78,11 +78,7 @@ object DeviceService {
      * Returns lat/lng or 0/0 if unavailable
      */
     @SuppressLint("MissingPermission")
-    fun getLocation(context: Context): Map<String, Double> {
-        var latitude = 0.0
-        var longitude = 0.0
-
-        // Check permission
+    fun getLocation(context: Context, callback: (Map<String, Double>) -> Unit) {
         val fineGranted = ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
@@ -93,55 +89,91 @@ object DeviceService {
 
         if (!fineGranted && !coarseGranted) {
             Log.w(TAG, "⚠️ Location permission not granted")
-            return mapOf("latitude" to 0.0, "longitude" to 0.0)
+            callback(mapOf("latitude" to 0.0, "longitude" to 0.0))
+            return
         }
 
         try {
             val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
-            // Try GPS first, then Network
-            var location: Location? = null
-
-            if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            // Pick best available provider
+            val provider = when {
+                lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+                lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+                else -> null
             }
 
-            if (location == null && lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            if (provider == null) {
+                Log.w(TAG, "⚠️ No location provider available")
+                // Try last known as fallback
+                val last = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                    ?: lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                callback(mapOf(
+                    "latitude" to (last?.latitude ?: 0.0),
+                    "longitude" to (last?.longitude ?: 0.0)
+                ))
+                return
             }
 
-            if (location != null) {
-                latitude = location.latitude
-                longitude = location.longitude
-                Log.d(TAG, "📍 Location: $latitude, $longitude")
-            } else {
-                Log.w(TAG, "⚠️ No last known location available")
+            // Timeout — return 0,0 after 15 seconds
+            val timeoutRunnable = Runnable {
+                Log.w(TAG, "⏰ Location timeout, trying last known")
+                val last = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                    ?: lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                callback(mapOf(
+                    "latitude" to (last?.latitude ?: 0.0),
+                    "longitude" to (last?.longitude ?: 0.0)
+                ))
             }
+            handler.postDelayed(timeoutRunnable, 15000)
+
+            // Request fresh location
+            lm.requestSingleUpdate(provider, object : android.location.LocationListener {
+                override fun onLocationChanged(location: android.location.Location) {
+                    handler.removeCallbacks(timeoutRunnable)
+                    Log.d(TAG, "📍 Fresh location: ${location.latitude}, ${location.longitude}")
+                    callback(mapOf(
+                        "latitude" to location.latitude,
+                        "longitude" to location.longitude
+                    ))
+                }
+                @Deprecated("Deprecated") override fun onStatusChanged(p: String?, s: Int, e: android.os.Bundle?) {}
+                override fun onProviderEnabled(p: String) {}
+                override fun onProviderDisabled(p: String) {
+                    handler.removeCallbacks(timeoutRunnable)
+                    callback(mapOf("latitude" to 0.0, "longitude" to 0.0))
+                }
+            }, android.os.Looper.getMainLooper())
+
+            Log.d(TAG, "🔄 Requesting fresh location from $provider...")
+
         } catch (e: Exception) {
             Log.e(TAG, "❌ Location error: ${e.message}")
+            callback(mapOf("latitude" to 0.0, "longitude" to 0.0))
         }
-
-        return mapOf("latitude" to latitude, "longitude" to longitude)
     }
 
     /**
-     * Get everything — device ID + details + location
+     * Get everything — device ID + details + location (async via callback)
      */
-    fun getFullDeviceInfo(context: Context): Map<String, Any> {
+    fun getFullDeviceInfo(context: Context, callback: (Map<String, Any>) -> Unit) {
         val deviceId = getOrCreateDeviceId(context)
         val details = getDeviceDetails()
-        val location = getLocation(context)
 
-        return mapOf(
-            "deviceId" to deviceId,
-            "manufacturer" to (details["manufacturer"] ?: ""),
-            "model" to (details["model"] ?: ""),
-            "osVersion" to (details["osVersion"] ?: ""),
-            "sdkVersion" to (details["sdkVersion"] ?: ""),
-            "brand" to (details["brand"] ?: ""),
-            "product" to (details["product"] ?: ""),
-            "latitude" to (location["latitude"] ?: 0.0),
-            "longitude" to (location["longitude"] ?: 0.0)
-        )
+        getLocation(context) { location ->
+            val result = mapOf(
+                "deviceId" to deviceId,
+                "manufacturer" to (details["manufacturer"] ?: ""),
+                "model" to (details["model"] ?: ""),
+                "osVersion" to (details["osVersion"] ?: ""),
+                "sdkVersion" to (details["sdkVersion"] ?: ""),
+                "brand" to (details["brand"] ?: ""),
+                "product" to (details["product"] ?: ""),
+                "latitude" to (location["latitude"] ?: 0.0),
+                "longitude" to (location["longitude"] ?: 0.0)
+            )
+            callback(result)
+        }
     }
 }
