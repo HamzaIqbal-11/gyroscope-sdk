@@ -1,11 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- SDK Permissions -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
     <application>
+
+        <!-- Face Recognition -->
         <activity
-            android:name=".FaceRecognitionActivity"
+            android:name=".kyc.FaceRecognitionActivity"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
-            android:screenOrientation="portrait"
             android:exported="false" />
+
+        <!-- KYC Activities -->
+
+
+        <!-- Screen Recording Service -->
+        <service
+            android:name="com.HamzaIqbal.gyroscope_plugin.ScreenRecordingService"
+            android:foregroundServiceType="mediaProjection"
+            android:exported="false" />
+
+        <!-- Overlay Service -->
+        <service
+            android:name="com.HamzaIqbal.gyroscope_plugin.StreamingOverlayService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false" />
+
     </application>
 </manifest>
