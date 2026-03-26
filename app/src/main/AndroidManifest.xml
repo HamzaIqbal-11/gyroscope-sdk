@@ -34,10 +34,9 @@
 
         <!-- ── Face Recognition ── -->
         <activity
-            android:name=".FaceRecognitionActivity"
+            android:name="com.example.gyroscope.kyc.FaceRecognitionActivity"
             android:exported="false"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
-
         <!-- ── KYC Activities ── -->
         <activity
             android:name=".kyc.KycActivity"
