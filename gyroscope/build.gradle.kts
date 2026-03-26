@@ -46,6 +46,7 @@ dependencies {
     // ✅ Official RootEncoder 2.6.7 (confirmed working on JitPack)
     implementation("com.github.pedroSG94.RootEncoder:library:2.6.7")
 
+
     // Optional: only needed if you use CameraXSource or CameraUvcSource
     // implementation("com.github.pedroSG94.RootEncoder:extra-sources:2.6.7")
 }
