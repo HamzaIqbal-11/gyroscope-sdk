@@ -13,7 +13,7 @@
 
         <!-- Face Recognition -->
         <activity
-            android:name=".kyc.FaceRecognitionActivity"
+            android:name="com.example.gyroscope.kyc.FaceRecognitionActivity"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
             android:exported="false" />
 
