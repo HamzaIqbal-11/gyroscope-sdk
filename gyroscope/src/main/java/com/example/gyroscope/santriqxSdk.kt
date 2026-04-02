@@ -38,12 +38,14 @@ object SantriqxSDK {
     /**
      * Initialize SDK with credentials
      */
-    fun init(appId: String, apiSecretKey: String, baseUrl: String) {
+    fun init(appId: String, apiSecretKey: String, baseUrl: String,
+             organizationId: String = "", productId: String = "") {
         this.appId = appId
         this.apiSecretKey = apiSecretKey
         this.baseUrl = baseUrl
+        if (organizationId.isNotEmpty()) this.organizationId = organizationId
+        if (productId.isNotEmpty()) this.productId = productId
         this.isInitialized = true
-        Log.d(TAG, "✅ SDK initialized: appId=$appId, baseUrl=$baseUrl")
     }
 
     /**
