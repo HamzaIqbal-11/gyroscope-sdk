@@ -59,20 +59,34 @@ object SantriqxSDK {
         Thread {
             val result = ApiService.get(
                 "$BASE_URL/config/$appId",
-                mapOf("X-Api-Key" to apiSecretKey)   // ← sirf secret key, sirf yahan
+                mapOf("X-Api-Key" to apiSecretKey)
             )
             if (result["success"] == true) {
-                val data = result["data"] as? Map<String, Any>
-                if (data != null) {
-                    config = data
-                    organizationId = (data["organization_id"] ?: "").toString()
-                    productId = (data["product_id"] ?: "").toString()
+                val dataStr = result["data"]
+                if (dataStr != null) {
+                    try {
+                        // data String hai — parse karo
+                        val json = org.json.JSONObject(dataStr.toString())
+                        organizationId = json.optInt("organization_id", 0).toString()
+                        productId = json.optInt("product_id", 0).toString()
 
-                    val servicesList = data["services"] as? List<*>
-                    if (servicesList != null) {
-                        services = servicesList.filterIsInstance<Map<String, Any>>()
+                        // Services parse
+                        val servicesArr = json.optJSONArray("services")
+                        if (servicesArr != null) {
+                            val list = mutableListOf<Map<String, Any>>()
+                            for (i in 0 until servicesArr.length()) {
+                                val s = servicesArr.getJSONObject(i)
+                                list.add(mapOf(
+                                    "name" to s.optString("name"),
+                                    "is_active" to s.optBoolean("is_active", false)
+                                ))
+                            }
+                            services = list
+                        }
+                        Log.d(TAG, "✅ Config: org=$organizationId, product=$productId, services=${services.size}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Config parse error: ${e.message}")
                     }
-                    Log.d(TAG, "✅ Config loaded: org=$organizationId, product=$productId, services=${services.size}")
                 }
             }
             callback(result)
