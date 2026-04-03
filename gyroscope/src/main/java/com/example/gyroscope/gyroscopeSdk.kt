@@ -258,6 +258,11 @@ class GyroscopeSDK(private val context: Context) {
     @Volatile var accelY: Float = 0f; private set
     @Volatile var accelZ: Float = 0f; private set
 
+    private var sensorListener: ((Double, Double, Double, Double, Double, Double) -> Unit)? = null
+
+    fun setSensorListener(listener: ((Double, Double, Double, Double, Double, Double) -> Unit)?) {
+        sensorListener = listener
+    }
     /**
      * Start gyroscope + accelerometer sensors
      */
@@ -285,6 +290,7 @@ class GyroscopeSDK(private val context: Context) {
                             ax = accelX, ay = accelY, az = accelZ
                         )
                         onData?.invoke(data)
+                        sensorListener?.invoke(0.0, 0.0, 0.0, accelX.toDouble(), accelY.toDouble(), accelZ.toDouble())
                     }
                 }
                 override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
@@ -310,6 +316,7 @@ class GyroscopeSDK(private val context: Context) {
                         ax = accelX, ay = accelY, az = accelZ
                     )
                     onData?.invoke(data)
+                    sensorListener?.invoke(0.0, 0.0, 0.0, accelX.toDouble(), accelY.toDouble(), accelZ.toDouble())
                     if (autoLog) {
                         Log.d(TAG, "Gyro X=%.4f Y=%.4f Z=%.4f | Accel X=%.4f Y=%.4f Z=%.4f | idle=${data.isIdle}"
                             .format(data.x, data.y, data.z, data.ax, data.ay, data.az))
