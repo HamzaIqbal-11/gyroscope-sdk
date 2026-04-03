@@ -57,7 +57,7 @@ object SantriqxSDK {
     fun endStream(streamKey: String, callback: (Map<String, Any>) -> Unit) {
         ensureInitialized()
         Thread {
-            val result = ApiService.post("$baseUrl/internal/stream/ended", mapOf(
+            val result = ApiService.post("$baseUrl/stream/internal/ended", mapOf(
                 "streamKey" to streamKey
             ))
             Log.d(TAG, "📡 Stream ended: $result")
