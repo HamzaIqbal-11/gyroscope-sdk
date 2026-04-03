@@ -54,6 +54,17 @@ object SantriqxSDK {
     /**
      * Fetch config from backend — returns active services
      */
+    fun endStream(streamKey: String, callback: (Map<String, Any>) -> Unit) {
+        ensureInitialized()
+        Thread {
+            val result = ApiService.post("$baseUrl/internal/stream/ended", mapOf(
+                "streamKey" to streamKey
+            ))
+            Log.d(TAG, "📡 Stream ended: $result")
+            callback(result)
+        }.start()
+    }
+
     fun fetchConfig(callback: (Map<String, Any>) -> Unit) {
         ensureInitialized()
         Thread {
