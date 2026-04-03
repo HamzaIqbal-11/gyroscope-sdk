@@ -49,6 +49,10 @@ object SantriqxSDK {
         if (organizationId.isNotEmpty()) this.organizationId = organizationId
         if (productId.isNotEmpty()) this.productId = productId
         this.isInitialized = true
+
+        ApiService.setGlobalHeaders(mapOf(
+            "X-Api-Key" to apiSecretKey
+        ))
     }
 
     /**
@@ -68,9 +72,7 @@ object SantriqxSDK {
     fun fetchConfig(callback: (Map<String, Any>) -> Unit) {
         ensureInitialized()
         Thread {
-            val result = ApiService.get(
-                "$BASE_URL/config/$appId",
-                mapOf("X-Api-Key" to apiSecretKey)
+            val result = ApiService.get("$BASE_URL/config/$appId"
             )
             if (result["success"] == true) {
                 val dataStr = result["data"]

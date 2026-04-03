@@ -17,16 +17,24 @@ object ApiService {
     private const val TAG = "ApiService"
     private const val TIMEOUT = 30000
 
+    // ── Global headers (set once, sent with every request) ──
+    private var globalHeaders: Map<String, String> = emptyMap()
+
+    fun setGlobalHeaders(headers: Map<String, String>) {
+        globalHeaders = headers
+        Log.d(TAG, "✅ Global headers set: ${headers.keys}")
+    }
     /**
      * GET request
      */
     fun get(url: String, headers: Map<String, String> = emptyMap()): Map<String, Any>  {
         return try {
             Log.d(TAG, "📡 GET $url")
+            val allHeaders = globalHeaders + headers  // ← global + per-request
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 setRequestProperty("Content-Type", "application/json")
-                headers.forEach { (key, value) -> setRequestProperty(key, value) }
+                allHeaders.forEach { (key, value) -> setRequestProperty(key, value) }
                 connectTimeout = TIMEOUT
                 readTimeout = TIMEOUT
             }
@@ -46,14 +54,15 @@ object ApiService {
     /**
      * POST request with JSON body
      */
-    fun post(url: String, data: Map<String, Any>): Map<String, Any> {
+    fun post(url: String, data: Map<String, Any>, headers: Map<String, String> = emptyMap()): Map<String, Any> {
         return try {
             Log.d(TAG, "📡 POST $url")
             val json = JSONObject(data).toString()
-
+            val allHeaders = globalHeaders + headers  // ← global + per-request
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json")
+                allHeaders.forEach { (key, value) -> setRequestProperty(key, value) }
                 connectTimeout = TIMEOUT
                 readTimeout = TIMEOUT
                 doOutput = true
@@ -84,18 +93,16 @@ object ApiService {
         fileName: String = "file.png"
     ): Map<String, Any> {
         return try {
-            Log.d(TAG, "📡 MULTIPART POST $url")
             val boundary = "----SantriqxSDK${System.currentTimeMillis()}"
             val file = File(filePath)
+            if (!file.exists()) return mapOf("success" to false, "error" to "File not found")
 
-            if (!file.exists()) {
-                return mapOf("success" to false, "error" to "File not found: $filePath")
-            }
-
+            val allHeaders = globalHeaders  // ← global headers
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-                connectTimeout = 120000 // 2 min for uploads
+                allHeaders.forEach { (key, value) -> setRequestProperty(key, value) }
+                connectTimeout = 120000
                 readTimeout = 120000
                 doOutput = true
             }
