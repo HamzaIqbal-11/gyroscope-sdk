@@ -57,7 +57,10 @@ object SantriqxSDK {
     fun fetchConfig(callback: (Map<String, Any>) -> Unit) {
         ensureInitialized()
         Thread {
-            val result = ApiService.get("$baseUrl/config/$appId?apiKey=$apiSecretKey")
+            val result = ApiService.get(
+                "$BASE_URL/config/$appId",
+                mapOf("X-Api-Key" to apiSecretKey)   // ← sirf secret key, sirf yahan
+            )
             if (result["success"] == true) {
                 val data = result["data"] as? Map<String, Any>
                 if (data != null) {

@@ -20,12 +20,13 @@ object ApiService {
     /**
      * GET request
      */
-    fun get(url: String): Map<String, Any> {
+    fun get(url: String, headers: Map<String, String> = emptyMap()): Map<String, Any>  {
         return try {
             Log.d(TAG, "📡 GET $url")
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 setRequestProperty("Content-Type", "application/json")
+                headers.forEach { (key, value) -> setRequestProperty(key, value) }
                 connectTimeout = TIMEOUT
                 readTimeout = TIMEOUT
             }
