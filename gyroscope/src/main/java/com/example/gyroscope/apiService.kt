@@ -22,7 +22,8 @@ object ApiService {
 
     fun setGlobalHeaders(headers: Map<String, String>) {
         globalHeaders = headers
-        Log.d(TAG, "✅ Global headers set: ${headers.keys}")
+        Log.d(TAG, "✅ Global headers set: Key : ${headers.values}")
+        Log.d(TAG, "✅ Global headers set: Value : ${headers.values}")
     }
     /**
      * GET request
