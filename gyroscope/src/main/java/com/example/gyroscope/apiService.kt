@@ -30,7 +30,7 @@ object ApiService {
      */
     fun get(url: String, headers: Map<String, String> = emptyMap()): Map<String, Any>  {
         return try {
-            Log.d(TAG, "📡 GET $url")
+            //Log.d(TAG, "📡 GET $url")
             val allHeaders = globalHeaders + headers  // ← global + per-request
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
@@ -57,7 +57,7 @@ object ApiService {
      */
     fun post(url: String, data: Map<String, Any>, headers: Map<String, String> = emptyMap()): Map<String, Any> {
         return try {
-            Log.d(TAG, "📡 POST $url")
+           // Log.d(TAG, "📡 POST $url")
             val json = JSONObject(data).toString()
             val allHeaders = globalHeaders + headers  // ← global + per-request
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {

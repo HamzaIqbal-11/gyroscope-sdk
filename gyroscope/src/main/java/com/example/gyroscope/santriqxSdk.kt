@@ -32,8 +32,9 @@ object SantriqxSDK {
         private set
 
     private const val BASE_URL =
+        "http://192.168.176.1:4000/app"
         //"https://unswarming-tensilely-cinthia.ngrok-free.dev/app"
-        "http://136.113.114.24:3000/app"
+      //  "http://136.113.114.24:3000/app"
 
     private var isInitialized = false
     private var config: Map<String, Any>? = null
@@ -65,7 +66,7 @@ object SantriqxSDK {
             val result = ApiService.post("$baseUrl/stream/internal/ended", mapOf(
                 "streamKey" to streamKey
             ))
-            Log.d(TAG, "📡 Stream ended: $result")
+            Log.d(TAG, "📡 Stream ended")
             callback(result)
         }.start()
     }
@@ -97,7 +98,7 @@ object SantriqxSDK {
                             }
                             services = list
                         }
-                        Log.d(TAG, "✅ Config: org=$organizationId, product=$productId, services=${services.size}")
+                     //   Log.d(TAG, "✅ Config: org=$organizationId, product=$productId, services=${services.size}")
                     } catch (e: Exception) {
                         Log.e(TAG, "❌ Config parse error: ${e.message}")
                     }
@@ -134,7 +135,7 @@ object SantriqxSDK {
                     "model" to (details["model"] ?: ""),
                     "appId" to appId
                 ))
-                Log.d(TAG, "📡 Device registered: $result")
+                Log.d(TAG, "📡 Device registered ")
                 callback(result)
             }.start()
         }
@@ -155,7 +156,7 @@ object SantriqxSDK {
                 "streamTitle" to "Recording",
                 "streamerName" to "device"
             ))
-            Log.d(TAG, "📡 Stream start: $result")
+            Log.d(TAG, "📡 Stream start ")
             callback(result)
         }.start()
     }
@@ -167,7 +168,7 @@ object SantriqxSDK {
         ensureInitialized()
         Thread {
             val result = ApiService.get("$baseUrl/stream/$streamKey")
-            Log.d(TAG, "📡 Stream details: $result")
+          //  Log.d(TAG, "📡 Stream details ")
             callback(result)
         }.start()
     }
