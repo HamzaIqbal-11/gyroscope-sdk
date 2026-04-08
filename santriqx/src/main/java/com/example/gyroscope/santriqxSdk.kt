@@ -45,7 +45,7 @@ object SantriqxSDK {
              organizationId: String = "", productId: String = "",baseUrl: String = "") {
         this.appId = appId
         this.apiSecretKey = apiSecretKey
-        if (baseUrl.isNotEmpty()) {
+        if (BASE_URL.isNotEmpty()) {
             this.baseUrl = BASE_URL
         }
 //        this.baseUrl = BASE_URL
