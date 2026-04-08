@@ -24,7 +24,7 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "sdk"
-include(":gyroscope")
+include(":santriqx")
 
 // Helps with Java 17 auto-provisioning (mostly for local builds)
 plugins {

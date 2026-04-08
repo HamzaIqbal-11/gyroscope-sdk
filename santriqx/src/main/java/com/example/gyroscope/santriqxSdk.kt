@@ -31,10 +31,8 @@ object SantriqxSDK {
     var productId: String = ""
         private set
 
-    private const val BASE_URL =
-       // "http://192.168.18.87:3000/app"
-        //"https://unswarming-tensilely-cinthia.ngrok-free.dev/app"
-        "http://136.113.114.24:3000/app"
+    var BASE_URL: String = "http://136.113.114.24:3000/app"  // default production
+        private set
 
     private var isInitialized = false
     private var config: Map<String, Any>? = null
@@ -44,10 +42,13 @@ object SantriqxSDK {
      * Initialize SDK with credentials
      */
     fun init(appId: String, apiSecretKey: String,
-             organizationId: String = "", productId: String = "") {
+             organizationId: String = "", productId: String = "",baseUrl: String = "") {
         this.appId = appId
         this.apiSecretKey = apiSecretKey
-        this.baseUrl = BASE_URL
+        if (baseUrl.isNotEmpty()) {
+            this.baseUrl = BASE_URL
+        }
+//        this.baseUrl = BASE_URL
         if (organizationId.isNotEmpty()) this.organizationId = organizationId
         if (productId.isNotEmpty()) this.productId = productId
         this.isInitialized = true
