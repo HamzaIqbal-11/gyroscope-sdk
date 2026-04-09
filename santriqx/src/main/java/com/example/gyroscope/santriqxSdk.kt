@@ -2,6 +2,9 @@ package com.earnscape.gyroscopesdk
 
 import android.content.Context
 import android.util.Log
+import android.app.Activity
+import android.content.Intent
+import android.os.Build
 
 /**
  * SantriqxSDK — Main Entry Point
@@ -36,6 +39,12 @@ object SantriqxSDK {
     private var isInitialized = false
     private var config: Map<String, Any>? = null
     private var services: List<Map<String, Any>> = emptyList()
+
+
+    // ── Recording state (class ke top pe variables ke saath add karo) ──
+    private var pendingRtmpUrl: String? = null
+    private var pendingStreamKey: String? = null
+    private var pendingDeviceId: String? = null
 
     /**
      * Initialize SDK with credentials
@@ -271,4 +280,121 @@ object SantriqxSDK {
     private fun ensureInitialized() {
         if (!isInitialized) throw IllegalStateException("SantriqxSDK not initialized. Call init() first.")
     }
+
+
+    fun startRecording(
+        activity: Activity,
+        requestCode: Int = 3001,
+        onSuccess: (streamKey: String, rtmpUrl: String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        ensureInitialized()
+
+        // 1. Backend API se RTMP URL lo
+        startStream(activity) { result ->
+            val dataStr = result["data"]
+            if (dataStr == null) {
+                activity.runOnUiThread { onError("No stream data from backend") }
+                return@startStream
+            }
+
+            try {
+                val json = org.json.JSONObject(dataStr.toString())
+                val rtmpUrl = json.optString("rtmpUrl")
+                val streamKey = json.optString("streamKey")
+
+                if (rtmpUrl.isEmpty() || streamKey.isEmpty()) {
+                    activity.runOnUiThread { onError("Invalid stream data") }
+                    return@startStream
+                }
+
+                // Store for when permission is granted
+                pendingRtmpUrl = "$rtmpUrl/$streamKey"
+                pendingStreamKey = streamKey
+                pendingDeviceId = DeviceService.getOrCreateDeviceId(activity)
+
+                activity.runOnUiThread {
+                    // 2. Request MediaProjection permission
+                    StreamingSDK.requestMediaProjectionPermission(activity, requestCode)
+                    onSuccess(streamKey, rtmpUrl)
+                }
+            } catch (e: Exception) {
+                activity.runOnUiThread { onError("Parse error: ${e.message}") }
+            }
+        }
+    }
+
+
+    fun handleRecordingResult(
+        activity: Activity,
+        requestCode: Int,
+        expectedCode: Int,
+        resultCode: Int,
+        data: Intent?,
+        onGranted: () -> Unit,
+        onDenied: () -> Unit
+    ) {
+        StreamingSDK.handleMediaProjectionResult(
+            requestCode = requestCode,
+            expectedCode = expectedCode,
+            resultCode = resultCode,
+            data = data,
+            onGranted = { code, projData ->
+                Log.d(TAG, "✅ MediaProjection granted, starting service")
+
+                // 3. ScreenRecordingService start karo
+                val intent = Intent(activity, ScreenRecordingService::class.java).apply {
+                    action = ScreenRecordingService.ACTION_START
+                    putExtra(ScreenRecordingService.EXTRA_RESULT_CODE, code)
+                    putExtra(ScreenRecordingService.EXTRA_DATA, projData)
+                    putExtra(ScreenRecordingService.EXTRA_STREAM_URL, pendingRtmpUrl ?: "")
+                    putExtra(ScreenRecordingService.EXTRA_GAME_ID, "recording")
+                    putExtra("streamKey", pendingStreamKey ?: "")
+                    putExtra("audio", "false")
+                    putExtra("streamTitle", "recording")
+                    putExtra("playerId", pendingDeviceId ?: "")
+                    putExtra("playerName", pendingDeviceId ?: "")
+                    putExtra("gameName", "Recording")
+                    putExtra("videoEnabled", "false")
+                    putExtra("targetPackageName", "")
+                    putExtra("minimumStreamSpeed", "1")
+                    putExtra("badConnectionTimeout", "30")
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    activity.startForegroundService(intent)
+                } else {
+                    activity.startService(intent)
+                }
+
+                onGranted()
+            },
+            onDenied = {
+                Log.e(TAG, "❌ MediaProjection denied")
+                onDenied()
+            }
+        )
+    }
+
+    fun stopRecording(context: Context) {
+        ensureInitialized()
+
+        // 1. Stop service
+        context.startService(Intent(context, ScreenRecordingService::class.java).apply {
+            action = ScreenRecordingService.ACTION_STOP
+        })
+
+        // 2. Notify backend
+        pendingStreamKey?.let { key ->
+            endStream(key) { result ->
+                Log.d(TAG, "Stream ended API: $result")
+            }
+        }
+
+        // Clear state
+        pendingRtmpUrl = null
+        pendingStreamKey = null
+        pendingDeviceId = null
+    }
+
 }
