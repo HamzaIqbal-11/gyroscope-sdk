@@ -50,7 +50,7 @@ object SantriqxSDK {
      * Initialize SDK with credentials
      */
     fun init(appId: String, apiSecretKey: String,
-             organizationId: String = "", productId: String = "",baseUrl: String = "") {
+              baseUrl: String = "") {
         this.appId = appId
         this.apiSecretKey = apiSecretKey
         if (baseUrl.isNotEmpty()) {
