@@ -24,15 +24,14 @@ object SantriqxSDK {
         private set
     var apiSecretKey: String = ""
         private set
-    var baseUrl: String = ""
+    var baseUrl: String = DEFAULT_BASE_URL    // ← default set
         private set
     var organizationId: String = ""
         private set
     var productId: String = ""
         private set
 
-    var BASE_URL: String = "http://136.113.114.24:3000/app"  // default production
-        private set
+    private const val DEFAULT_BASE_URL = "http://136.113.114.24:3000/app"
 
     private var isInitialized = false
     private var config: Map<String, Any>? = null
@@ -45,8 +44,12 @@ object SantriqxSDK {
              organizationId: String = "", productId: String = "",baseUrl: String = "") {
         this.appId = appId
         this.apiSecretKey = apiSecretKey
-        if (BASE_URL.isNotEmpty()) {
-            this.baseUrl = BASE_URL
+        if (baseUrl.isNotEmpty()) {
+            this.baseUrl = baseUrl
+            Log.d(TAG, "✅ Using custom baseUrl: $baseUrl")
+        } else {
+            this.baseUrl = DEFAULT_BASE_URL
+            Log.d(TAG, "✅ Using default baseUrl: $DEFAULT_BASE_URL")
         }
 //        this.baseUrl = BASE_URL
         if (organizationId.isNotEmpty()) this.organizationId = organizationId
@@ -75,7 +78,7 @@ object SantriqxSDK {
     fun fetchConfig(callback: (Map<String, Any>) -> Unit) {
         ensureInitialized()
         Thread {
-            val result = ApiService.get("$BASE_URL/config/$appId"
+            val result = ApiService.get("$baseUrl/config/$appId"
             )
             if (result["success"] == true) {
                 val dataStr = result["data"]
