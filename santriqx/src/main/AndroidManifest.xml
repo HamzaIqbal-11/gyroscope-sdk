@@ -11,6 +11,12 @@
 
     <application>
 
+        <service
+            android:name="com.earnscape.gyroscopesdk.ScreenRecordingService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"/>
+
         <!-- Face Recognition -->
         <activity
             android:name="com.example.gyroscope.kyc.FaceRecognitionActivity"
